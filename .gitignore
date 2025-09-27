@@ -1,5 +1,6 @@
 # Backend secrets and cache
 backend/.env
+backend/venv/
 backend/firebase-credentials.json
 backend/__pycache__/
 backend/app/__pycache__/
