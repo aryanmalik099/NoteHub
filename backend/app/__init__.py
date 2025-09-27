@@ -30,23 +30,36 @@ def create_app():
     app.config["JWT_TOKEN_LOCATION"] = ["headers"]
     app.config["JWT_COOKIE_CSRF_PROTECT"] = False
     app.config["JWT_CSRF_PROTECTION"] = False
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:Pass4%40ryan@localhost/notehub'
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-    # 3. Link extensions to the app instance using .init_app()
+    db_url = os.getenv('DATABASE_URL', 'mysql+pymysql://root:Pass4%40ryan@localhost/notehub')
+    if db_url and db_url.startswith("postgres://"):
+        db_url = db_url.replace("postgres://", "postgresql://", 1)
+    app.config['SQLALCHEMY_DATABASE_URI'] = db_url
+
     db.init_app(app)
     migrate.init_app(app, db)
     jwt.init_app(app)
     
     # Configure CORS with specific options
+    frontend_url = os.getenv('CORS_ORIGIN', 'http://localhost:3000')
+
     cors.init_app(app, 
-                  resources={r"/api/*": {"origins": "http://localhost:3000"}}, 
+                  resources={r"/api/*": {"origins": frontend_url}}, 
                   supports_credentials=True,
                   allow_headers=["Authorization", "Content-Type"])
 
     # --- Firebase Initialization ---
-    cred_path = os.path.join(os.path.dirname(__file__), '..', 'firebase-credentials.json')
-    cred = credentials.Certificate(cred_path)
+    firebase_cred_json = os.getenv('FIREBASE_CREDENTIALS_JSON')
+    if firebase_cred_json:
+        import json
+        cred_dict = json.loads(firebase_cred_json)
+        cred = credentials.Certificate(cred_dict)
+    else:
+        # Fallback for local development
+        cred_path = os.path.join(os.path.dirname(__file__), '..', 'firebase-credentials.json')
+        cred = credentials.Certificate(cred_path)
+
     firebase_admin.initialize_app(cred, {
         'storageBucket': 'notehub-project.firebasestorage.app' 
     })
