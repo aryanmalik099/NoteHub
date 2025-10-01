@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { jwtDecode } from 'jwt-decode';
 import { toast } from 'react-toastify';
+import { Link } from 'react-router-dom';
 import api from '../api';
 
 function Login({ setIsLoggedIn }) {
@@ -54,6 +55,9 @@ function Login({ setIsLoggedIn }) {
                 </div>
                 <button type="submit">Login</button>
             </form>
+            <div style={{ textAlign: 'center', marginTop: '20px' }}>
+                <Link to="/forgot-password">Forgot Password?</Link>
+            </div>
         </div>
     );
 }

@@ -7,13 +7,11 @@ const api = axios.create({
   baseURL: process.env.REACT_APP_API_URL || 'http://127.0.0.1:5000/api',
 });
 
-// Axios Request Interceptor:
-// This function runs BEFORE each request is sent.
+// Axios Request Interceptor: This runs BEFORE each request is sent.
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
     if (token) {
-      // If a token exists, add it to the Authorization header
       config.headers['Authorization'] = `Bearer ${token}`;
     }
     return config;
@@ -23,8 +21,7 @@ api.interceptors.request.use(
   }
 );
 
-// Axios Response Interceptor:
-// This function runs AFTER a response is received.
+// Axios Response Interceptor: This runs AFTER a response is received.
 api.interceptors.response.use(
   (response) => {
     // If the request was successful, just return the response
@@ -33,14 +30,18 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
-    // If the error is 401 and it's not a retry request
-    if (error.response.status === 401 && !originalRequest._retry) {
+    // --- START OF FIX ---
+    // Check for 401 error, ensure it's not a retry, AND ensure it wasn't a login attempt.
+    // The originalRequest.url will be '/login' for login attempts.
+    if (error.response.status === 401 && !originalRequest._retry && originalRequest.url !== '/login') {
+    // --- END OF FIX ---
+      
       originalRequest._retry = true; // Mark that we've tried to refresh
 
       try {
         const refreshToken = localStorage.getItem('refreshToken');
         // Make a request to the /refresh endpoint
-        const response = await axios.post('http://127.0.0.1:5000/api/refresh', {}, {
+        const response = await api.post('/refresh', {}, {
             headers: { Authorization: `Bearer ${refreshToken}` }
         });
         
@@ -59,11 +60,13 @@ api.interceptors.response.use(
         localStorage.removeItem('token');
         localStorage.removeItem('refreshToken');
         localStorage.removeItem('userId');
-        window.location.href = '/'; // Or trigger a logout state update
+        localStorage.removeItem('userRole');
+        window.location.href = '/login'; // Redirect to login
         return Promise.reject(refreshError);
       }
     }
-    // For any other errors, just pass them along
+    // For any other errors (including the login 401), just pass them along
+    // to the component's local catch block.
     return Promise.reject(error);
   }
 );

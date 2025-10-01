@@ -5,6 +5,8 @@ import Login from './components/Login';
 import NoteUpload from './components/NoteUpload';
 import NoteList from './components/NoteList';
 import ProfilePage from './components/ProfilePage';
+import ForgotPassword from './components/ForgotPassword';
+import ResetPassword from './components/ResetPassword';
 import logo from './logo.png';
 import './App.css';
 
@@ -78,16 +80,10 @@ function App() {
         <Routes>
           {/* --- PUBLIC ROUTES --- */}
           <Route path="/" element={<NoteList />} />
-          
-          {/* If the user is logged in, redirect them from login/signup to the homepage */}
-          <Route 
-            path="/login" 
-            element={isLoggedIn ? <Navigate to="/" /> : <Login setIsLoggedIn={setIsLoggedIn} />} 
-          />
-          <Route 
-            path="/signup" 
-            element={isLoggedIn ? <Navigate to="/" /> : <Signup />} 
-          />
+          <Route path="/login" element={isLoggedIn ? <Navigate to="/" /> : <Login setIsLoggedIn={setIsLoggedIn} />} />
+          <Route path="/signup" element={isLoggedIn ? <Navigate to="/" /> : <Signup />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password/:token" element={<ResetPassword />} />
 
           {/* --- PROTECTED ROUTES --- */}
           {/* We wrap the component in our ProtectedRoute helper */}

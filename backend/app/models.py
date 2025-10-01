@@ -9,6 +9,8 @@ class User(db.Model):
     password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(20), nullable=False, default='student')
     moderated_department_id = db.Column(db.Integer, nullable=True)
+    reset_token = db.Column(db.String(100), nullable=True)
+    reset_token_expiration = db.Column(db.DateTime, nullable=True)
 
     notes = db.relationship('Note', backref='author', lazy=True)
 

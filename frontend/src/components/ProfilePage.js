@@ -17,6 +17,13 @@ function ProfilePage() {
         semester: '',
         academic_year: '',
     });
+    const [passwordData, setPasswordData] = useState({
+        current_password: '',
+        new_password: '',
+        confirm_password: ''
+    });
+    // 1. New state to toggle the password form's visibility
+    const [showPasswordForm, setShowPasswordForm] = useState(false);
 
     useEffect(() => {
         // We can fetch both sets of data at the same time
@@ -82,15 +89,71 @@ function ProfilePage() {
         }
     };
 
+    const handlePasswordChange = (e) => {
+        setPasswordData({ ...passwordData, [e.target.name]: e.target.value });
+    };
+
+    const handleSubmitPasswordChange = async (e) => {
+        e.preventDefault();
+        if (passwordData.new_password !== passwordData.confirm_password) {
+            toast.error("New passwords do not match.");
+            return;
+        }
+        try {
+            const response = await api.post('/profile/change-password', {
+                current_password: passwordData.current_password,
+                new_password: passwordData.new_password
+            });
+            toast.success(response.data.message);
+            // Clear the form fields after successful submission
+            setPasswordData({ current_password: '', new_password: '', confirm_password: '' });
+            setShowPasswordForm(false);
+        } catch (error) {
+            toast.error(error.response?.data?.error || "Failed to change password.");
+        }
+    };
+
     if (loading) return <div>Loading your profile...</div>;
 
     if (!user) return <div>Could not load profile.</div>;
 
     return (
-        <div>
-            <h2>User Profile</h2>
-            <p><FaUser /><strong> Username:</strong> {user.username}</p>
-            <p><FaEnvelope /><strong> Email:</strong> {user.email}</p>
+        <div className="profile-page-container">
+            <div className="form-container">
+                <h2>User Profile</h2>
+                <p><FaUser /> <strong>Username:</strong> {user.username}</p>
+                <p><FaEnvelope /> <strong>Email:</strong> {user.email}</p>
+                
+                <hr className="form-divider" />
+
+                {showPasswordForm ? (
+                    <>
+                        <h3>Change Password</h3>
+                        <form onSubmit={handleSubmitPasswordChange}>
+                            <div className="form-group">
+                                <label htmlFor="current_password">Current Password</label>
+                                <input id="current_password" type="password" name="current_password" value={passwordData.current_password} onChange={handlePasswordChange} required />
+                            </div>
+                            <div className="form-group">
+                                <label htmlFor="new_password">New Password</label>
+                                <input id="new_password" type="password" name="new_password" value={passwordData.new_password} onChange={handlePasswordChange} required />
+                            </div>
+                            <div className="form-group">
+                                <label htmlFor="confirm_password">Confirm New Password</label>
+                                <input id="confirm_password" type="password" name="confirm_password" value={passwordData.confirm_password} onChange={handlePasswordChange} required />
+                            </div>
+                            <button type="submit">Update Password</button>
+                            <button type="button" onClick={() => setShowPasswordForm(false)} style={{ marginLeft: '10px', backgroundColor: '#6c757d' }}>
+                                Cancel
+                            </button>
+                        </form>
+                    </>
+                ) : (
+                    <button onClick={() => setShowPasswordForm(true)}>
+                        Change Password
+                    </button>
+                )}
+            </div>
             <hr />
             <h3>My Notes</h3>
             {notes.length > 0 ? (

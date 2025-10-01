@@ -2,6 +2,9 @@ from flask import request, jsonify, Blueprint
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity, create_refresh_token
+import secrets
+from datetime import datetime, timedelta
+from .email import send_password_reset_email
 from .utils import upload_file_to_firebase, delete_file_from_firebase
 from .models import User, Note
 from . import db
@@ -68,6 +71,66 @@ def login():
     refresh_token = create_refresh_token(identity=str(user.id))
     return jsonify(access_token=access_token, refresh_token=refresh_token), 200
 
+@api.route('/profile/change-password', methods=['POST'])
+@jwt_required()
+def change_password():
+    # 1. Get the current user's ID from the token
+    current_user_id = get_jwt_identity()
+    user = User.query.get(current_user_id)
+
+    # 2. Get the password data from the request
+    data = request.get_json()
+    current_password = data.get('current_password')
+    new_password = data.get('new_password')
+
+    if not current_password or not new_password:
+        return jsonify({"error": "Current and new passwords are required"}), 400
+
+    # 3. Verify the user's current password
+    if not check_password_hash(user.password_hash, current_password):
+        return jsonify({"error": "Invalid current password"}), 401
+
+    # 4. Hash the new password and update the user record
+    user.password_hash = generate_password_hash(new_password, method='pbkdf2:sha256')
+    db.session.commit()
+
+    return jsonify({"message": "Password updated successfully"}), 200
+
+
+@api.route('/forgot-password', methods=['POST'])
+def forgot_password():
+    data = request.get_json()
+    user = User.query.filter_by(email=data.get('email')).first()
+    if user:
+        # Generate a secure token
+        token = secrets.token_urlsafe(32)
+        user.reset_token = token
+        user.reset_token_expiration = datetime.utcnow() + timedelta(hours=1)
+        db.session.commit()
+
+        # Send the email
+        send_password_reset_email(user, token)
+
+    # Always return a success message to prevent email enumeration
+    return jsonify({"message": "If an account with that email exists, a password reset link has been sent."}), 200
+
+@api.route('/reset-password/<token>', methods=['POST'])
+def reset_password(token):
+    # Find the user by the token and check if the token is still valid
+    user = User.query.filter_by(reset_token=token).first()
+    if not user or user.reset_token_expiration < datetime.utcnow():
+        return jsonify({"error": "Invalid or expired password reset token."}), 400
+
+    data = request.get_json()
+    new_password = data.get('new_password')
+
+    # Update password and invalidate the token
+    user.password_hash = generate_password_hash(new_password, method='pbkdf2:sha256')
+    user.reset_token = None
+    user.reset_token_expiration = None
+    db.session.commit()
+
+    return jsonify({"message": "Your password has been successfully reset."}), 200
 
 @api.route('/refresh', methods=['POST'])
 @jwt_required(refresh=True) # <-- Note the 'refresh=True' argument
