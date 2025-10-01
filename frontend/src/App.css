@@ -144,6 +144,32 @@ button:hover {
     transition: background-color 0.2s;
 }
 
+/* --- Verified Badge and Checkbox Styles --- */
+.verified-badge {
+    background-color: #28a745;
+    color: white;
+    font-size: 0.7rem;
+    font-weight: bold;
+    padding: 3px 8px;
+    border-radius: 10px;
+    margin-left: 10px;
+    vertical-align: middle;
+}
+
+.checkbox-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.checkbox-group input[type="checkbox"] {
+    width: auto;
+}
+
+.checkbox-group label {
+    margin-bottom: 0;
+}
+
 .pagination-controls {
     display: flex;
     justify-content: center;
@@ -190,4 +216,127 @@ button:hover {
 button:disabled {
     background-color: #a0c9ff;
     cursor: not-allowed;
+}
+
+/* --- Admin Panel Table Styles --- */
+
+.form-container-admin {
+    max-width: 800px;
+    margin: 40px auto;
+    padding: 30px;
+    background: #ffffff;
+    border-radius: 8px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+}
+
+.admin-panel table {
+    width: 100%;
+    border-collapse: collapse; /* Removes space between cells */
+    margin-top: 25px;
+}
+
+.admin-panel th, .admin-panel td {
+    border: 1px solid #ddd;
+    padding: 12px 15px;
+    text-align: left;
+}
+
+.admin-panel th {
+    background-color: #f4f7f9; /* Light grey header */
+    font-weight: 600;
+}
+
+.admin-panel tr:nth-child(even) {
+    background-color: #f9f9f9; /* Zebra-striping for rows */
+}
+
+.admin-panel tr:hover {
+    background-color: #f1f1f1; /* Highlight on hover */
+}
+
+/* Style for the dropdown select */
+.admin-panel select {
+    padding: 8px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+    background-color: white;
+}
+
+/* --- Admin Dashboard Styles --- */
+.dashboard-section {
+    margin-bottom: 40px;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+}
+
+.stat-card {
+    background-color: #f4f7f9;
+    padding: 20px;
+    border-radius: 8px;
+    text-align: center;
+}
+
+.stat-card h4 {
+    margin: 0 0 10px 0;
+    color: #555;
+}
+
+.stat-card p {
+    font-size: 2rem;
+    font-weight: bold;
+    color: #007bff;
+    margin: 0;
+}
+
+.recent-activity-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+    margin-top: 30px;
+}
+
+.recent-activity-grid h4 {
+    border-bottom: 2px solid #eee;
+    padding-bottom: 10px;
+}
+
+.recent-activity-grid ul {
+    list-style-type: none;
+    padding: 0;
+}
+
+.recent-activity-grid li {
+    padding: 8px 0;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+/* --- Admin Activity Log Styles --- */
+.activity-log-container {
+    margin-top: 40px;
+}
+
+.activity-log-container h3 {
+    margin-bottom: 20px;
+}
+
+#log-date {
+    max-width: 250px;
+    padding: 8px;
+}
+
+.log-filters {
+    display: flex;
+    gap: 20px;
+    align-items: flex-end;
+}
+
+.log-table-container {
+    max-height: 500px;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    border-radius: 4px;
 }

@@ -2,11 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, Navigate } from 'react-router-dom';
 import Signup from './components/Signup';
 import Login from './components/Login';
-import NoteUpload from './components/NoteUpload';
-import NoteList from './components/NoteList';
 import ProfilePage from './components/ProfilePage';
 import ForgotPassword from './components/ForgotPassword';
 import ResetPassword from './components/ResetPassword';
+import AdminPanel from './components/AdminPanel';
+import NoteUpload from './components/NoteUpload';
+import NoteList from './components/NoteList';
 import logo from './logo.png';
 import './App.css';
 
@@ -25,6 +26,7 @@ const ProtectedRoute = ({ isLoggedIn, children }) => {
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const userRole = localStorage.getItem('userRole');
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -62,9 +64,9 @@ function App() {
           <Link to="/">Home</Link>
           {isLoggedIn ? (
             <>
+              {userRole === 'super_admin' && <Link to="/admin">Admin Panel</Link>}
               <Link to="/upload">Upload Note</Link>
               <Link to="/profile">Profile</Link>
-              {/* Using a Link for logout ensures consistent styling */}
               <Link to="/login" onClick={handleLogout}>Logout</Link>
             </>
           ) : (
@@ -86,7 +88,6 @@ function App() {
           <Route path="/reset-password/:token" element={<ResetPassword />} />
 
           {/* --- PROTECTED ROUTES --- */}
-          {/* We wrap the component in our ProtectedRoute helper */}
           <Route 
             path="/upload" 
             element={
@@ -103,6 +104,14 @@ function App() {
               </ProtectedRoute>
             } 
           />
+          <Route 
+            path="/admin" 
+            element={
+                <ProtectedRoute isLoggedIn={isLoggedIn}>
+                    <AdminPanel />
+                </ProtectedRoute>
+            } 
+        />
         </Routes>
       </main>
     </Router>
