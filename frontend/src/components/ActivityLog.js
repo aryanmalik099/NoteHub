@@ -39,7 +39,7 @@ function ActivityLog() {
     }, [selectedDate, selectedAction]);
 
     return (
-        <div className="activity-log-container">
+        <div className="admin-panel activity-log-container">
             <h3>Activity Logs</h3>
             <div className="log-filters">
                 <div className="form-group">
@@ -83,10 +83,10 @@ function ActivityLog() {
                             {logs.length > 0 ? (
                                 logs.map(log => (
                                     <tr key={log.id}>
-                                        <td>{log.timestamp}</td>
-                                        <td>{log.username}</td>
-                                        <td>{log.action}</td>
-                                        <td>{log.details}</td>
+                                        <td data-label="Timestamp">{log.timestamp}</td>
+                                        <td data-label="User">{log.username}</td>
+                                        <td data-label="Action">{log.action}</td>
+                                        <td data-label="Details">{log.details}</td>
                                     </tr>
                                 ))
                             ) : (

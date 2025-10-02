@@ -93,11 +93,11 @@ function AdminPanel() {
                     <tbody>
                         {users.map(user => (
                             <tr key={user.id}>
-                                <td>{user.id}</td>
-                                <td>{user.username}</td>
-                                <td>{user.email}</td>
-                                <td>{user.role}</td>
-                                <td>
+                                <td data-label="ID">{user.id}</td>
+                                <td data-label="Username">{user.username}</td>
+                                <td data-label="Email">{user.email}</td>
+                                <td data-label="Role">{user.role}</td>
+                                <td data-label="Change Role">
                                     <select onChange={(e) => handleRoleChange(user.id, e.target.value)} value={user.role}>
                                         <option value="student">Student</option>
                                         <option value="moderator">Moderator</option>

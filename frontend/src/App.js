@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, Navigate } from 'react-router-dom';
+import { FaBars, FaTimes } from 'react-icons/fa'; // Icons for the menu
 import Signup from './components/Signup';
 import Login from './components/Login';
 import ProfilePage from './components/ProfilePage';
@@ -10,108 +11,74 @@ import NoteUpload from './components/NoteUpload';
 import NoteList from './components/NoteList';
 import logo from './logo.png';
 import './App.css';
-
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
-// Helper component to protect routes
-// It checks if the user is logged in. If not, it redirects to the /login page.
 const ProtectedRoute = ({ isLoggedIn, children }) => {
-  if (!isLoggedIn) {
-    return <Navigate to="/login" replace />;
-  }
+  if (!isLoggedIn) { return <Navigate to="/login" replace />; }
   return children;
 };
 
-
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const userRole = localStorage.getItem('userRole');
+  const [isMenuOpen, setIsMenuOpen] = useState(false); // State for mobile menu
 
   useEffect(() => {
     const token = localStorage.getItem('token');
-    if (token) {
-      setIsLoggedIn(true);
-    }
+    if (token) { setIsLoggedIn(true); }
   }, []);
 
-  // Updated logout function to clear all relevant items
   const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('refreshToken');
-    localStorage.removeItem('userId');
-    localStorage.removeItem('userRole');
+    localStorage.clear(); // Clears all stored items (token, role, etc.)
     setIsLoggedIn(false);
   };
+  
+  const closeMenu = () => setIsMenuOpen(false); // Function to close the menu
 
   return (
     <Router>
-      <ToastContainer
-        position="top-right"
-        autoClose={5000}
-        hideProgressBar={false}
-        newestOnTop={false}
-        closeOnClick
-        rtl={false}
-        pauseOnFocusLoss
-        draggable
-        pauseOnHover
-        theme="light"
-      />
+      <ToastContainer position="top-right" autoClose={5000} theme="light" />
+      
+      {/* This overlay will dim the background when the menu is open */}
+      {isMenuOpen && <div className="overlay" onClick={closeMenu}></div>}
+
       <header className="App-header">
-        <h1><img src={logo} alt="NoteHub"/></h1>
-        <nav>
-          <Link to="/">Home</Link>
+        <h1><Link to="/" onClick={closeMenu}><img src={logo} alt="NoteHub"/></Link></h1>
+        
+        {/* The nav menu now has a conditional class to slide it into view */}
+        <nav className={isMenuOpen ? "nav-menu active" : "nav-menu"}>
+          <Link to="/" onClick={closeMenu}>Home</Link>
           {isLoggedIn ? (
             <>
-              {userRole === 'super_admin' && <Link to="/admin">Admin Panel</Link>}
-              <Link to="/upload">Upload Note</Link>
-              <Link to="/profile">Profile</Link>
-              <Link to="/login" onClick={handleLogout}>Logout</Link>
+              {localStorage.getItem('userRole') === 'super_admin' && <Link to="/admin" onClick={closeMenu}>Admin Panel</Link>}
+              <Link to="/upload" onClick={closeMenu}>Upload Note</Link>
+              <Link to="/profile" onClick={closeMenu}>Profile</Link>
+              <Link to="/login" onClick={() => { closeMenu(); handleLogout(); }}>Logout</Link>
             </>
           ) : (
             <>
-              <Link to="/login">Login</Link>
-              <Link to="/signup">Sign Up</Link>
+              <Link to="/login" onClick={closeMenu}>Login</Link>
+              <Link to="/signup" onClick={closeMenu}>Sign Up</Link>
             </>
           )}
         </nav>
+
+        {/* This button toggles the menu's visibility */}
+        <div className="hamburger" onClick={() => setIsMenuOpen(!isMenuOpen)}>
+          {isMenuOpen ? <FaTimes /> : <FaBars />}
+        </div>
       </header>
       
       <main>
         <Routes>
-          {/* --- PUBLIC ROUTES --- */}
           <Route path="/" element={<NoteList />} />
           <Route path="/login" element={isLoggedIn ? <Navigate to="/" /> : <Login setIsLoggedIn={setIsLoggedIn} />} />
           <Route path="/signup" element={isLoggedIn ? <Navigate to="/" /> : <Signup />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password/:token" element={<ResetPassword />} />
-
-          {/* --- PROTECTED ROUTES --- */}
-          <Route 
-            path="/upload" 
-            element={
-              <ProtectedRoute isLoggedIn={isLoggedIn}>
-                <NoteUpload />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/profile" 
-            element={
-              <ProtectedRoute isLoggedIn={isLoggedIn}>
-                <ProfilePage />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/admin" 
-            element={
-                <ProtectedRoute isLoggedIn={isLoggedIn}>
-                    <AdminPanel />
-                </ProtectedRoute>
-            } 
-        />
+          <Route path="/upload" element={<ProtectedRoute isLoggedIn={isLoggedIn}><NoteUpload /></ProtectedRoute>} />
+          <Route path="/profile" element={<ProtectedRoute isLoggedIn={isLoggedIn}><ProfilePage /></ProtectedRoute>} />
+          <Route path="/admin" element={<ProtectedRoute isLoggedIn={isLoggedIn}><AdminPanel /></ProtectedRoute>} />
         </Routes>
       </main>
     </Router>
