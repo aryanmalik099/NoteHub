@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import api from '../api';
 import { toast } from 'react-toastify';
 
@@ -11,6 +11,7 @@ function NoteUpload() {
     });
     const [file, setFile] = useState(null);
     const [isUploading, setIsUploading] = useState(false);
+    const fileInputRef = useRef(null);
 
     const handleInputChange = (e) => {
         setNoteData({ ...noteData, [e.target.name]: e.target.value });
@@ -58,6 +59,11 @@ function NoteUpload() {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
             toast.success(response.data.message || 'Note uploaded successfully!');
+            setNoteData({ title: '', subject: '', semester: '', academic_year: '' });
+            setFile(null);
+            if (fileInputRef.current) {
+                fileInputRef.current.value = ""; // Clear the file input visually
+            }
         } catch (error) {
             const data = error.response?.data;
             toast.error(data?.error || 'Server responded with an error.');

@@ -16,7 +16,6 @@ function Signup() {
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
-            // 2. Use the 'api' client instead of axios
             const response = await api.post('/signup', formData);
             toast.success(response.data.message);
         } catch (error) {
@@ -33,8 +32,8 @@ function Signup() {
                     <input id="signup-username" type="text" name="username" value={formData.username} onChange={handleChange} required />
                 </div>
                 <div className="form-group">
-                    <label htmlFor="signup-email">Email</label>
-                    <input id="signup-email" type="email" name="email" value={formData.email} onChange={handleChange} required />
+                    <label htmlFor="signup-email">College Email</label>
+                    <input id="signup-email" type="email" name="email" value={formData.email} onChange={handleChange} required placeholder="..._@imsec.ac.in" />
                 </div>
                 <div className="form-group">
                     <label htmlFor="signup-password">Password</label>

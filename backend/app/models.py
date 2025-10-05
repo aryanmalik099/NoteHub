@@ -1,7 +1,6 @@
 from . import db
 from datetime import datetime
 
-# --- Association Table for Professor <-> Department Many-to-Many relationship ---
 professor_departments = db.Table('professor_departments',
     db.Column('user_id', db.Integer, db.ForeignKey('users.id'), primary_key=True),
     db.Column('department_id', db.Integer, db.ForeignKey('departments.id'), primary_key=True)
@@ -29,22 +28,49 @@ class Department(db.Model):
 
     def __repr__(self):
         return f'<Department {self.short_name}>'
+    
+class AcademicSession(db.Model):
+    __tablename__ = 'academic_sessions'
+    id = db.Column(db.Integer, primary_key=True)
+    year_name = db.Column(db.String(50), unique=True, nullable=False) # e.g., "2025-2026"
+    is_active = db.Column(db.Boolean, default=False, nullable=False)
+    
+    sections = db.relationship('Section', backref='academic_session', lazy=True)
+    def __repr__(self): return f'<AcademicSession {self.year_name}>'
+
+class Section(db.Model):
+    __tablename__ = 'sections'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50), nullable=False) # e.g., "1", "2", "A"
+    year = db.Column(db.Integer, nullable=False) # e.g., 1, 2, 3, 4
+    
+    department_id = db.Column(db.Integer, db.ForeignKey('departments.id'), nullable=False)
+    department = db.relationship('Department', backref='sections', lazy=True)
+    
+    academic_session_id = db.Column(db.Integer, db.ForeignKey('academic_sessions.id'), nullable=False)
+
+    # A section's unique code, e.g., "3CSE2"
+    @property
+    def section_code(self):
+        return f"{self.year}{self.department.short_name}{self.name}"
+        
+    def __repr__(self): return f'<Section {self.section_code}>'
 
 class User(db.Model):
     __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
-    college_id = db.Column(db.String(20), unique=True, nullable=True) # e.g., A2024CSE10368
+    college_id = db.Column(db.String(20), unique=True, nullable=True)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(20), nullable=False, default='student')
     
-    # --- Fields for Students ---
     admission_year = db.Column(db.Integer, nullable=True)
     department_id = db.Column(db.Integer, db.ForeignKey('departments.id'), nullable=True)
     department = db.relationship('Department', backref='students', lazy=True)
+    section_id = db.Column(db.Integer, db.ForeignKey('sections.id'), nullable=True)
+    section = db.relationship('Section', backref='students', lazy=True)
 
-    # --- Fields for Professors (Many-to-Many) ---
     departments_taught = db.relationship('Department', secondary=professor_departments,
                                          backref=db.backref('professors', lazy='dynamic'))
 

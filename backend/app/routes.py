@@ -1,4 +1,5 @@
 from flask import request, jsonify, Blueprint
+from sqlalchemy.orm import joinedload
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from functools import wraps
@@ -7,7 +8,7 @@ import secrets
 from datetime import date, datetime, timedelta
 from .email import send_password_reset_email
 from .utils import upload_file_to_firebase, delete_file_from_firebase
-from .models import User, Note, Log
+from .models import User, Note, Log, Department, Course, AcademicSession, Section
 from .logger import log_activity
 from . import db
 
@@ -27,6 +28,8 @@ def super_admin_required():
     def wrapper(fn):
         @wraps(fn)
         def decorator(*args, **kwargs):
+            if request.method == 'OPTIONS':
+                return fn(*args, **kwargs)
             verify_jwt_in_request()
             claims = get_jwt()
             if claims.get("role") == 'super_admin':
@@ -38,32 +41,53 @@ def super_admin_required():
 
 @api.route('/signup', methods=['POST'])
 def signup():
-    # 1. Get the data from the incoming request
     data = request.get_json()
-    if not data or not data.get('email') or not data.get('password'):
-        return jsonify({"error": "Missing email or password"}), 400
+    email = data.get('email')
+    password = data.get('password')
+    username = data.get('username')
 
-    # 2. Check if user already exists
-    if User.query.filter_by(email=data.get('email')).first():
+    if not email or not password or not username:
+        return jsonify({"error": "Missing required fields"}), 400
+
+    # 1. Enforce college email domain
+    if not email.endswith('@imsec.ac.in'):
+        return jsonify({"error": "Only college email addresses (@imsec.ac.in) are allowed."}), 400
+
+    if User.query.filter_by(email=email).first():
         return jsonify({"error": "Email address already in use"}), 409
     
-    if User.query.filter_by(username=data.get('username')).first():
+    if User.query.filter_by(username=username).first():
         return jsonify({"error": "Username already in use"}), 409
     
-    # 3. Hash the password for security
-    hashed_password = generate_password_hash(data['password'], method='pbkdf2:sha256')
+    hashed_password = generate_password_hash(password, method='pbkdf2:sha256')
 
-    # 4. Create a new User object with the data
+    # 2. Automatically derive the College ID from the email
+    college_id = email.split('@')[0].upper()
+
     new_user = User(
-        username=data.get('username'),
-        email=data.get('email'),
-        password_hash=hashed_password
+        username=username,
+        email=email,
+        password_hash=hashed_password,
+        college_id=college_id
     )
 
-    # 5. Add the new user to the database
+    # 3. Automatically parse department and admission year from the derived ID
+    try:
+        admission_year_str = college_id[1:5]
+        department_short_name = college_id[5:-5]
+        department = Department.query.filter_by(short_name=department_short_name).first()
+
+        if department:
+            new_user.department_id = department.id
+            new_user.admission_year = int(admission_year_str)
+        else:
+            print(f"Warning: Department '{department_short_name}' not found for College ID '{college_id}'")
+    except (IndexError, ValueError) as e:
+        print(f"Could not parse College ID '{college_id}': {e}")
+
     db.session.add(new_user)
     db.session.commit()
-    log_activity('user_signup', f"New user '{new_user.username}' created.")
+    log_activity('user_signup', f"New user '{new_user.username}' created with College ID '{college_id}'.")
 
     return jsonify({"message": "User created successfully!"}), 201
 
@@ -342,13 +366,10 @@ def delete_note(note_id):
         db.session.commit()
         log_activity('note_delete', f"Note ID {note_id} deleted by user ID {current_user_id}.")
         return jsonify({"message": "Note deleted successfully"}), 200
+    
     except Exception as e:
         db.session.rollback()
-        return jsonify({"error": "An internal server error occurred"}), 500
-
-    except Exception as e:
-        db.session.rollback()
-        print(f"An error occurred during note deletion: {e}") # Log the error
+        print(f"An error occurred during note deletion: {e}")
         return jsonify({"error": "An internal server error occurred"}), 500
 
 
@@ -406,15 +427,32 @@ def update_note(note_id):
 @api.route('/admin/users', methods=['GET'])
 @super_admin_required()
 def get_all_users():
-    users = User.query.all()
+    # Eagerly load department relationships to prevent performance issues
+    users = User.query.options(
+        joinedload(User.department), 
+        joinedload(User.departments_taught)
+    ).all()
+
     users_list = []
     for user in users:
-        users_list.append({
+        user_data = {
             'id': user.id,
             'username': user.username,
             'email': user.email,
             'role': user.role
-        })
+        }
+        
+        if user.role == 'student' and user.section:
+            user_data['section_id'] = user.section_id
+        elif user.role == 'professor':
+            user_data['departments_taught'] = [{
+                'id': dept.id,
+                'name': dept.name,
+                'short_name': dept.short_name
+            } for dept in user.departments_taught]
+            
+        users_list.append(user_data)
+        
     return jsonify(users_list)
 
 @api.route('/admin/users/<int:user_id>/role', methods=['PUT'])
@@ -430,6 +468,9 @@ def update_user_role(user_id):
     # Simple validation for allowed roles
     if new_role not in ['student', 'moderator', 'professor', 'super_admin']:
         return jsonify(error="Invalid role specified"), 400
+    
+    if user.role == 'professor' and new_role != 'professor':
+        user.departments_taught = []
         
     user.role = new_role
     db.session.commit()
@@ -439,15 +480,15 @@ def update_user_role(user_id):
 @api.route('/admin/stats', methods=['GET'])
 @super_admin_required()
 def get_admin_stats():
-    total_users = db.session.query(User).count()
-    total_notes = db.session.query(Note).count()
+    total_users = User.query.count()
+    total_notes = Note.query.count()
 
     # Get the 5 most recent users
     recent_users = User.query.order_by(User.id.desc()).limit(5).all()
     recent_users_list = [{'id': u.id, 'username': u.username, 'email': u.email} for u in recent_users]
 
     # Get the 5 most recent notes
-    recent_notes = Note.query.order_by(Note.created_at.desc()).limit(5).all()
+    recent_notes = Note.query.options(joinedload(Note.author)).order_by(Note.created_at.desc()).limit(5).all()
     recent_notes_list = [{'id': n.id, 'title': n.title, 'author': n.author.username if n.author else 'Unknown'} for n in recent_notes]
 
     return jsonify({
@@ -490,3 +531,325 @@ def get_activity_logs():
         })
         
     return jsonify(logs_list)
+
+@api.route('/admin/courses', methods=['POST'])
+@super_admin_required()
+def create_course():
+    data = request.get_json()
+    if not data or not data.get('name') or not data.get('short_name') or not data.get('duration_years'):
+        return jsonify(error="Missing required fields"), 400
+
+    new_course = Course(
+        name=data['name'],
+        short_name=data['short_name'],
+        duration_years=data['duration_years']
+    )
+    db.session.add(new_course)
+    db.session.commit()
+    log_activity('course_created', f"Course '{new_course.short_name}' created.")
+    return jsonify(message="Course created successfully", id=new_course.id), 201
+
+@api.route('/admin/courses', methods=['GET'])
+@super_admin_required()
+def get_all_courses():
+    courses = Course.query.all()
+    courses_list = [{
+        'id': c.id,
+        'name': c.name,
+        'short_name': c.short_name,
+        'duration_years': c.duration_years
+    } for c in courses]
+    return jsonify(courses_list)
+
+@api.route('/admin/courses/<int:course_id>', methods=['PUT'])
+@super_admin_required()
+def update_course(course_id):
+    course = Course.query.get_or_404(course_id)
+    data = request.get_json()
+
+    course.name = data.get('name', course.name)
+    course.short_name = data.get('short_name', course.short_name)
+    course.duration_years = data.get('duration_years', course.duration_years)
+    
+    db.session.commit()
+    log_activity('course_updated', f"Course ID {course_id} updated.")
+    return jsonify(message="Course updated successfully")
+
+@api.route('/admin/courses/<int:course_id>', methods=['DELETE'])
+@super_admin_required()
+def delete_course(course_id):
+    course = Course.query.get_or_404(course_id)
+    
+    if course.departments:
+        return jsonify(error="Cannot delete course with associated departments. Please reassign or delete them first."), 409
+
+    db.session.delete(course)
+    db.session.commit()
+    log_activity('course_deleted', f"Course ID {course_id} ('{course.short_name}') deleted.")
+    return jsonify(message="Course deleted successfully")
+
+
+@api.route('/admin/departments', methods=['POST'])
+@super_admin_required()
+def create_department():
+    data = request.get_json()
+    if not data or not data.get('name') or not data.get('short_name') or not data.get('course_id'):
+        return jsonify(error="Missing required fields"), 400
+
+    # Check if the course exists
+    course = Course.query.get(data['course_id'])
+    if not course:
+        return jsonify(error="Parent course not found"), 404
+
+    new_department = Department(
+        name=data['name'],
+        short_name=data['short_name'],
+        course_id=data['course_id']
+    )
+    db.session.add(new_department)
+    db.session.commit()
+    log_activity('department_created', f"Department '{new_department.short_name}' created.")
+    return jsonify(message="Department created successfully", id=new_department.id), 201
+
+@api.route('/admin/departments', methods=['GET'])
+@super_admin_required()
+def get_all_departments():
+    # Use joinedload to efficiently fetch the related course name
+    departments = Department.query.options(joinedload(Department.course)).all()
+    departments_list = [{
+        'id': d.id,
+        'name': d.name,
+        'short_name': d.short_name,
+        'course_id': d.course_id,
+        'course_short_name': d.course.short_name if d.course else 'N/A'
+    } for d in departments]
+    return jsonify(departments_list)
+
+@api.route('/admin/departments/<int:dept_id>', methods=['PUT'])
+@super_admin_required()
+def update_department(dept_id):
+    department = Department.query.get_or_404(dept_id)
+    data = request.get_json()
+
+    department.name = data.get('name', department.name)
+    department.short_name = data.get('short_name', department.short_name)
+    department.course_id = data.get('course_id', department.course_id)
+    
+    db.session.commit()
+    log_activity('department_updated', f"Department ID {dept_id} updated.")
+    return jsonify(message="Department updated successfully")
+
+@api.route('/admin/departments/<int:dept_id>', methods=['DELETE'])
+@super_admin_required()
+def delete_department(dept_id):
+    department = Department.query.get_or_404(dept_id)
+    
+    # Prevent deleting a department if it has students, professors, or notes
+    if department.students or department.professors.first() or department.notes:
+        return jsonify(error="Cannot delete department with associated users or notes."), 409
+
+    db.session.delete(department)
+    db.session.commit()
+    log_activity('department_deleted', f"Department ID {dept_id} ('{department.short_name}') deleted.")
+    return jsonify(message="Department deleted successfully")
+
+@api.route('/admin/users/<int:user_id>/department', methods=['PUT'])
+@super_admin_required()
+def assign_student_department(user_id):
+    user = User.query.get_or_404(user_id)
+    if user.role != 'student':
+        return jsonify(error="This user is not a student."), 400
+
+    data = request.get_json()
+    department_id = data.get('department_id')
+
+    if department_id:
+        department = Department.query.get(department_id)
+        if not department:
+            return jsonify(error="Department not found."), 404
+        user.department_id = department_id
+    else:
+        # Allow un-assigning a student
+        user.department_id = None
+
+    db.session.commit()
+    log_activity('student_department_assigned', f"Student '{user.username}' assigned to department ID {department_id}.")
+    return jsonify(message="Student department updated successfully.")
+
+@api.route('/admin/professors/<int:user_id>/departments', methods=['PUT'])
+@super_admin_required()
+def assign_professor_departments(user_id):
+    user = User.query.get_or_404(user_id)
+    if user.role != 'professor':
+        return jsonify(error="This user is not a professor."), 400
+
+    data = request.get_json()
+    department_ids = data.get('department_ids', [])
+
+    # Clear existing departments
+    user.departments_taught = []
+
+    # Assign new departments
+    for dept_id in department_ids:
+        department = Department.query.get(dept_id)
+        if department:
+            user.departments_taught.append(department)
+
+    db.session.commit()
+    log_activity('professor_departments_assigned', f"Professor '{user.username}' departments updated.")
+    return jsonify(message="Professor departments updated successfully.")
+
+@api.route('/admin/sessions', methods=['POST'])
+@super_admin_required()
+def create_session():
+    data = request.get_json()
+    if not data or not data.get('year_name'):
+        return jsonify(error="Year name is required"), 400
+
+    # If setting a session to active, ensure no others are active
+    if data.get('is_active'):
+        AcademicSession.query.update({AcademicSession.is_active: False})
+
+    new_session = AcademicSession(
+        year_name=data['year_name'],
+        is_active=data.get('is_active', False)
+    )
+    db.session.add(new_session)
+    db.session.commit()
+    log_activity('session_created', f"Academic session '{new_session.year_name}' created.")
+    return jsonify(message="Academic session created successfully", id=new_session.id), 201
+
+@api.route('/admin/sessions', methods=['GET'])
+@super_admin_required()
+def get_all_sessions():
+    sessions = AcademicSession.query.order_by(AcademicSession.year_name.desc()).all()
+    sessions_list = [{
+        'id': s.id,
+        'year_name': s.year_name,
+        'is_active': s.is_active
+    } for s in sessions]
+    return jsonify(sessions_list)
+
+@api.route('/admin/sessions/<int:session_id>', methods=['PUT'])
+@super_admin_required()
+def update_session(session_id):
+    session = AcademicSession.query.get_or_404(session_id)
+    data = request.get_json()
+
+    # If activating this session, deactivate all others first
+    if data.get('is_active'):
+        AcademicSession.query.filter(AcademicSession.id != session_id).update({AcademicSession.is_active: False})
+
+    session.year_name = data.get('year_name', session.year_name)
+    session.is_active = data.get('is_active', session.is_active)
+    
+    db.session.commit()
+    log_activity('session_updated', f"Academic session ID {session_id} updated.")
+    return jsonify(message="Academic session updated successfully")
+
+@api.route('/admin/sessions/<int:session_id>', methods=['DELETE'])
+@super_admin_required()
+def delete_session(session_id):
+    session = AcademicSession.query.get_or_404(session_id)
+    
+    if session.sections:
+        return jsonify(error="Cannot delete session with associated sections. Please delete them first."), 409
+
+    db.session.delete(session)
+    db.session.commit()
+    log_activity('session_deleted', f"Session ID {session_id} ('{session.year_name}') deleted.")
+    return jsonify(message="Academic session deleted successfully")
+
+@api.route('/admin/sections', methods=['POST'])
+@super_admin_required()
+def create_section():
+    data = request.get_json()
+    required_fields = ['name', 'year', 'department_id', 'academic_session_id']
+    if not all(field in data for field in required_fields):
+        return jsonify(error="Missing required fields"), 400
+
+    new_section = Section(
+        name=data['name'],
+        year=data['year'],
+        department_id=data['department_id'],
+        academic_session_id=data['academic_session_id']
+    )
+    db.session.add(new_section)
+    db.session.commit()
+    log_activity('section_created', f"Section '{new_section.section_code}' created.")
+    return jsonify(message="Section created successfully", id=new_section.id), 201
+
+@api.route('/admin/sections', methods=['GET'])
+@super_admin_required()
+def get_all_sections():
+    # Eagerly load related data for efficiency
+    sections = Section.query.options(
+        joinedload(Section.department),
+        joinedload(Section.academic_session)
+    ).order_by(Section.academic_session_id.desc(), Section.department_id, Section.year, Section.name).all()
+    
+    sections_list = [{
+        'id': s.id,
+        'name': s.name,
+        'year': s.year,
+        'department_id': s.department_id,
+        'academic_session_id': s.academic_session_id,
+        'section_code': s.section_code,
+        'department_name': s.department.name if s.department else 'N/A',
+        'session_name': s.academic_session.year_name if s.academic_session else 'N/A'
+    } for s in sections]
+    return jsonify(sections_list)
+
+@api.route('/admin/sections/<int:section_id>', methods=['PUT'])
+@super_admin_required()
+def update_section(section_id):
+    section = Section.query.get_or_404(section_id)
+    data = request.get_json()
+
+    section.name = data.get('name', section.name)
+    section.year = data.get('year', section.year)
+    section.department_id = data.get('department_id', section.department_id)
+    section.academic_session_id = data.get('academic_session_id', section.academic_session_id)
+    
+    db.session.commit()
+    log_activity('section_updated', f"Section ID {section_id} updated.")
+    return jsonify(message="Section updated successfully")
+
+@api.route('/admin/sections/<int:section_id>', methods=['DELETE'])
+@super_admin_required()
+def delete_section(section_id):
+    section = Section.query.get_or_404(section_id)
+    
+    if section.students:
+        return jsonify(error="Cannot delete section with assigned students."), 409
+
+    db.session.delete(section)
+    db.session.commit()
+    log_activity('section_deleted', f"Section ID {section_id} ('{section.section_code}') deleted.")
+    return jsonify(message="Section deleted successfully")
+
+@api.route('/admin/students/<int:user_id>/section', methods=['PUT'])
+@super_admin_required()
+def assign_student_section(user_id):
+    user = User.query.get_or_404(user_id)
+    if user.role != 'student':
+        return jsonify(error="This user is not a student."), 400
+
+    data = request.get_json()
+    section_id = data.get('section_id')
+
+    # Allow un-assigning a student by passing a null/empty section_id
+    if section_id:
+        section = Section.query.get(section_id)
+        if not section:
+            return jsonify(error="Section not found."), 404
+        user.section_id = section_id
+        # Automatically update the user's department based on the section
+        user.department_id = section.department_id
+    else:
+        user.section_id = None
+        user.department_id = None # Also clear the department if un-assigned
+
+    db.session.commit()
+    log_activity('student_section_assigned', f"Student '{user.username}' assigned to section ID {section_id}.")
+    return jsonify(message="Student section updated successfully.")
