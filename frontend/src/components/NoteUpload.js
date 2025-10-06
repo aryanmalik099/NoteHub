@@ -1,8 +1,10 @@
-import React, { useRef, useState } from 'react';
-import api from '../api';
+import React, { useState} from 'react';
 import { toast } from 'react-toastify';
+import api from '../api';
+import { Container, Paper, Title, TextInput, NumberInput, Button, FileInput } from '@mantine/core';
 
 function NoteUpload() {
+    // --- Your original state, including isUploading, is now here ---
     const [noteData, setNoteData] = useState({
         title: '',
         subject: '',
@@ -11,41 +13,23 @@ function NoteUpload() {
     });
     const [file, setFile] = useState(null);
     const [isUploading, setIsUploading] = useState(false);
-    const fileInputRef = useRef(null);
 
     const handleInputChange = (e) => {
         setNoteData({ ...noteData, [e.target.name]: e.target.value });
     };
 
-    const handleFileChange = (e) => {
-        const selectedFile = e.target.files[0];
-
-        if (!selectedFile) {
-            setFile(null);
-            return;
-        }
-
-        const ALLOWED_EXTENSIONS = ['pdf', 'png', 'jpg', 'jpeg'];
-        const fileExtension = selectedFile.name.split('.').pop().toLowerCase();
-        
-        // Check the file extension
-        if (ALLOWED_EXTENSIONS.includes(fileExtension)) {
-            setFile(selectedFile); // If valid, set the file
-        } else {
-            setFile(null); // If invalid, clear the file selection
-            e.target.value = null; // Also clear the input field in the browser
-            toast.error('Invalid file type. Please select a PDF, PNG, or JPG.');
-        }
+    const handleSemesterChange = (value) => {
+        setNoteData({ ...noteData, semester: value || '' });
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        
         if (!file) {
-            toast.error('Please select a valid file to upload.');
+            toast.error('Please select a file to upload.');
             return;
         }
-        setIsUploading(true);
+
+        setIsUploading(true); // --- Your uploading state logic ---
 
         const formData = new FormData();
         formData.append('file', file);
@@ -55,54 +39,89 @@ function NoteUpload() {
         formData.append('academic_year', noteData.academic_year);
 
         try {
-            const response = await api.post('/notes/upload', formData, {
-                headers: { 'Content-Type': 'multipart/form-data' }
+            await api.post('/notes/upload', formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data'
+                }
             });
-            toast.success(response.data.message || 'Note uploaded successfully!');
+            toast.success('Note uploaded successfully!');
+            // --- Your original form clearing logic, adapted for Mantine ---
             setNoteData({ title: '', subject: '', semester: '', academic_year: '' });
-            setFile(null);
-            if (fileInputRef.current) {
-                fileInputRef.current.value = ""; // Clear the file input visually
-            }
+            setFile(null); // This is the correct way to clear the Mantine FileInput
         } catch (error) {
-            const data = error.response?.data;
-            toast.error(data?.error || 'Server responded with an error.');
+            toast.error(error.response?.data?.error || 'An error occurred during upload.');
+        } finally {
+            setIsUploading(false); // --- Your uploading state logic ---
         }
     };
 
     return (
-        // 1. Use a more specific CSS class for the form container
-        <div className="form-container">
-            <h2>Upload New Note</h2>
-            <form onSubmit={handleSubmit}>
-                {/* 2. Wrap each input/label pair in a div */}
-                <div className="form-group">
-                    <label htmlFor="title">Title</label>
-                    <input id="title" type="text" name="title" onChange={handleInputChange} required />
-                </div>
-                <div className="form-group">
-                    <label htmlFor="subject">Subject</label>
-                    <input id="subject" type="text" name="subject" onChange={handleInputChange} required />
-                </div>
-                <div className="form-group">
-                    <label htmlFor="semester">Semester</label>
-                    <input id="semester" type="number" name="semester" onChange={handleInputChange} required />
-                </div>
-                <div className="form-group">
-                    <label htmlFor="academic_year">Academic Year</label>
-                    <input id="academic_year" type="text" name="academic_year" onChange={handleInputChange} required />
-                </div>
-                <div className="form-group">
-                    <label htmlFor="file">Note File</label>
-                    <input id="file" type="file" onChange={handleFileChange} required />
-                </div>
-                
-                {/* 3. Add disabled property to button */}
-                <button type="submit" disabled={isUploading}>
-                    {isUploading ? 'Uploading...' : 'Upload'}
-                </button>
-            </form>
-        </div>
+        <Container size={560} my={40}>
+            <Title ta="center">
+                Upload a New Note
+            </Title>
+            
+            <Paper withBorder shadow="md" p={30} mt={30} radius="md">
+                <form onSubmit={handleSubmit}>
+                    <TextInput
+                        label="Title"
+                        placeholder="e.g., Chapter 5 Thermodynamics"
+                        required
+                        name="title"
+                        value={noteData.title}
+                        onChange={handleInputChange}
+                        disabled={isUploading}
+                    />
+                    <TextInput
+                        label="Subject Code"
+                        placeholder="e.g., KAS-101T"
+                        required
+                        mt="md"
+                        name="subject"
+                        value={noteData.subject}
+                        onChange={handleInputChange}
+                        disabled={isUploading}
+                    />
+                    <NumberInput
+                        label="Semester"
+                        placeholder="e.g., 3"
+                        required
+                        mt="md"
+                        name="semester"
+                        value={noteData.semester}
+                        onChange={handleSemesterChange}
+                        min={1}
+                        max={8}
+                        disabled={isUploading}
+                    />
+                    <TextInput
+                        label="Academic Year"
+                        placeholder="e.g., 2023-24"
+                        required
+                        mt="md"
+                        name="academic_year"
+                        value={noteData.academic_year}
+                        onChange={handleInputChange}
+                        disabled={isUploading}
+                    />
+                    <FileInput
+                        label="Note File"
+                        placeholder="Click to upload a PDF, PNG, or JPG"
+                        required
+                        mt="md"
+                        value={file}
+                        onChange={setFile}
+                        accept=".pdf,.png,.jpg,.jpeg"
+                        disabled={isUploading}
+                        clearable // Allows the user to clear the file selection
+                    />
+                    {/* The Mantine Button has a `loading` prop that shows a spinner, perfect for `isUploading` */}
+                    <Button fullWidth mt="xl" type="submit" loading={isUploading}>
+                        Upload Note
+                    </Button>
+                </form>
+            </Paper>
+        </Container>
     );
 }
 

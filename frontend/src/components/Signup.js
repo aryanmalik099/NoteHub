@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { toast } from 'react-toastify';
 import api from '../api';
+import { Container, Paper, Title, TextInput, PasswordInput, Button } from '@mantine/core';
 
 function Signup() {
     const [formData, setFormData] = useState({
@@ -8,7 +9,7 @@ function Signup() {
         email: '',
         password: ''
     });
-    
+
     const handleChange = (e) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
     };
@@ -24,24 +25,46 @@ function Signup() {
     };
 
     return (
-        <div className="form-container">
-            <h2>Sign Up</h2>
-            <form onSubmit={handleSubmit}>
-                <div className="form-group">
-                    <label htmlFor="signup-username">Username</label>
-                    <input id="signup-username" type="text" name="username" value={formData.username} onChange={handleChange} required />
-                </div>
-                <div className="form-group">
-                    <label htmlFor="signup-email">College Email</label>
-                    <input id="signup-email" type="email" name="email" value={formData.email} onChange={handleChange} required placeholder="..._@imsec.ac.in" />
-                </div>
-                <div className="form-group">
-                    <label htmlFor="signup-password">Password</label>
-                    <input id="signup-password" type="password" name="password" value={formData.password} onChange={handleChange} required />
-                </div>
-                <button type="submit">Sign Up</button>
-            </form>
-        </div>
+        <Container size={420} my={40}>
+            <Title ta="center">
+                Create an Account
+            </Title>
+            
+            <Paper withBorder shadow="md" p={30} mt={30} radius="md">
+                <form onSubmit={handleSubmit}>
+                    <TextInput
+                        label="Username"
+                        placeholder="Choose a username"
+                        required
+                        name="username"
+                        value={formData.username}
+                        onChange={handleChange}
+                    />
+                    <TextInput
+                        label="College Email"
+                        placeholder="..._@imsec.ac.in"
+                        required
+                        mt="md"
+                        name="email"
+                        type="email"
+                        value={formData.email}
+                        onChange={handleChange}
+                    />
+                    <PasswordInput
+                        label="Password"
+                        placeholder="Your password"
+                        required
+                        mt="md"
+                        name="password"
+                        value={formData.password}
+                        onChange={handleChange}
+                    />
+                    <Button fullWidth mt="xl" type="submit">
+                        Sign Up
+                    </Button>
+                </form>
+            </Paper>
+        </Container>
     );
 }
 

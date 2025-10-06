@@ -1,66 +1,92 @@
-import React from 'react';
-import { FaEdit, FaTrash } from 'react-icons/fa';
+import React, { useState } from 'react';
+import { Table, Button, Group, TextInput, Select, Paper, Title } from '@mantine/core';
 
 function DepartmentManagement({ departments, courses, onAdd, onEdit, onDelete }) {
-    const handleAddDepartment = (e) => {
+    const [name, setName] = useState('');
+    const [shortName, setShortName] = useState('');
+    const [courseId, setCourseId] = useState('');
+
+    const handleAddDepartmentSubmit = (e) => {
         e.preventDefault();
-        const form = e.target;
-        const newDepartment = {
-            name: form.name.value,
-            short_name: form.short_name.value,
-            course_id: parseInt(form.course_id.value, 10)
-        };
-        onAdd(newDepartment);
-        form.reset();
+        onAdd({
+            name: name,
+            short_name: shortName,
+            course_id: Number(courseId)
+        });
+        setName('');
+        setShortName('');
+        setCourseId('');
     };
 
+    const courseOptions = courses.map(course => ({
+        value: String(course.id),
+        label: `${course.name} (${course.short_name})`
+    }));
+
+    const rows = departments.map((dept) => (
+        <Table.Tr key={dept.id}>
+            <Table.Td>{dept.id}</Table.Td>
+            <Table.Td>{dept.name}</Table.Td>
+            <Table.Td>{dept.short_name}</Table.Td>
+            <Table.Td>{dept.course_short_name}</Table.Td>
+            <Table.Td>
+                <Group gap="xs">
+                    <Button variant="outline" size="xs" onClick={() => onEdit(dept)}>Edit</Button>
+                    <Button variant="outline" color="red" size="xs" onClick={() => onDelete(dept.id)}>Delete</Button>
+                </Group>
+            </Table.Td>
+        </Table.Tr>
+    ));
+
     return (
-        <div className="admin-section">
-            <h2>Manage Departments</h2>
+        <div>
+            <Paper withBorder shadow="md" p={30} mt="md" radius="md">
+                <Title order={4} mb="md">Add New Department</Title>
+                <form onSubmit={handleAddDepartmentSubmit}>
+                    <Group grow>
+                        <TextInput
+                            label="Department Name"
+                            placeholder="e.g., Computer Science"
+                            required
+                            value={name}
+                            onChange={(e) => setName(e.currentTarget.value)}
+                        />
+                        <TextInput
+                            label="Short Name"
+                            placeholder="e.g., CSE"
+                            required
+                            value={shortName}
+                            onChange={(e) => setShortName(e.currentTarget.value)}
+                        />
+                        <Select
+                            label="Parent Course"
+                            placeholder="Select a course"
+                            required
+                            data={courseOptions}
+                            value={courseId}
+                            onChange={setCourseId}
+                            searchable
+                        />
+                    </Group>
+                    <Button type="submit" mt="md">Add Department</Button>
+                </form>
+            </Paper>
 
-            {/* --- Add Department Form --- */}
-            <form onSubmit={handleAddDepartment} className="add-course-form">
-                <input type="text" name="name" placeholder="Department Name (e.g., Computer Science)" required />
-                <input type="text" name="short_name" placeholder="Short Name (e.g., CSE)" required />
-                <select name="course_id" required>
-                    <option value="">Select Course</option>
-                    {courses.map(course => (
-                        <option key={course.id} value={course.id}>
-                            {course.name} ({course.short_name})
-                        </option>
-                    ))}
-                </select>
-                <button type="submit">Add Department</button>
-            </form>
-
-            {/* --- Departments Table --- */}
-            <div className="log-table-container">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Name</th>
-                            <th>Short Name</th>
-                            <th>Course</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {departments.map(dept => (
-                            <tr key={dept.id}>
-                                <td data-label="ID">{dept.id}</td>
-                                <td data-label="Name">{dept.name}</td>
-                                <td data-label="Short Name">{dept.short_name}</td>
-                                <td data-label="Course">{dept.course_short_name}</td>
-                                <td data-label="Actions">
-                                    <button className="action-btn" onClick={() => onEdit(dept)}><FaEdit /></button>
-                                    <button className="action-btn" onClick={() => onDelete(dept.id)}><FaTrash /></button>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
+            <Paper withBorder shadow="md" p={30} mt="xl" radius="md">
+                <Title order={4} mb="md">Existing Departments</Title>
+                <Table striped highlightOnHover withTableBorder withColumnBorders>
+                    <Table.Thead>
+                        <Table.Tr>
+                            <Table.Th>ID</Table.Th>
+                            <Table.Th>Name</Table.Th>
+                            <Table.Th>Short Name</Table.Th>
+                            <Table.Th>Course</Table.Th>
+                            <Table.Th>Actions</Table.Th>
+                        </Table.Tr>
+                    </Table.Thead>
+                    <Table.Tbody>{rows}</Table.Tbody>
+                </Table>
+            </Paper>
         </div>
     );
 }

@@ -1,73 +1,121 @@
-import React from 'react';
-import { FaEdit, FaTrash } from 'react-icons/fa';
+import React, { useState } from 'react';
+import { Table, Button, Group, TextInput, Select, NumberInput, Paper, Title, Grid } from '@mantine/core';
 
-function SectionManagement({ sections, departments, sessions, onAdd, onEdit, onDelete }) {
-    const handleAddSection = (e) => {
+function SectionManagement({ sections, departments, sessions, onAdd, onEdit, onDelete}) {
+    // State for the "Add Section" form
+    const [name, setName] = useState('');
+    const [year, setYear] = useState('');
+    const [departmentId, setDepartmentId] = useState('');
+    const [sessionId, setSessionId] = useState('');
+
+    const handleAddSectionSubmit = (e) => {
         e.preventDefault();
-        const form = e.target;
-        const newSection = {
-            name: form.name.value,
-            year: parseInt(form.year.value, 10),
-            department_id: parseInt(form.department_id.value, 10),
-            academic_session_id: parseInt(form.academic_session_id.value, 10)
-        };
-        onAdd(newSection);
-        form.reset();
+        onAdd({
+            name: name,
+            year: Number(year),
+            department_id: Number(departmentId),
+            academic_session_id: Number(sessionId)
+        });
+        setName('');
+        setYear('');
+        setDepartmentId('');
+        setSessionId('');
     };
 
+    const departmentOptions = departments.map(dept => ({
+        value: String(dept.id),
+        label: dept.name
+    }));
+
+    const sessionOptions = sessions.map(session => ({
+        value: String(session.id),
+        label: session.year_name
+    }));
+
+    const rows = sections.map((sec) => (
+        <Table.Tr key={sec.id}>
+            <Table.Td>{sec.section_code}</Table.Td>
+            <Table.Td>{sec.department_name}</Table.Td>
+            <Table.Td>{sec.year}</Table.Td>
+            <Table.Td>{sec.name}</Table.Td>
+            <Table.Td>{sec.session_name}</Table.Td>
+            <Table.Td>
+                <Group gap="xs">
+                    <Button variant="outline" size="xs" onClick={() => onEdit(sec)}>Edit</Button>
+                    <Button variant="outline" color="red" size="xs" onClick={() => onDelete(sec.id)}>Delete</Button>
+                </Group>
+            </Table.Td>
+        </Table.Tr>
+    ));
+
     return (
-        <div className="admin-section">
-            <h2>Manage Sections</h2>
+        <div>
+            <Paper withBorder shadow="md" p={30} mt="md" radius="md">
+                <Title order={4} mb="md">Add New Section</Title>
+                <form onSubmit={handleAddSectionSubmit}>
+                    <Grid>
+                        <Grid.Col span={{ base: 12, sm: 6 }}>
+                            <TextInput
+                                label="Section Name"
+                                placeholder="e.g., 1, 2, A"
+                                required
+                                value={name}
+                                onChange={(e) => setName(e.currentTarget.value)}
+                            />
+                        </Grid.Col>
+                        <Grid.Col span={{ base: 12, sm: 6 }}>
+                            <NumberInput
+                                label="Year"
+                                placeholder="e.g., 1, 2, 3, 4"
+                                required
+                                value={year}
+                                onChange={setYear}
+                                min={1}
+                            />
+                        </Grid.Col>
+                        <Grid.Col span={{ base: 12, sm: 6 }}>
+                            <Select
+                                label="Department"
+                                placeholder="Select a department"
+                                required
+                                data={departmentOptions}
+                                value={departmentId}
+                                onChange={setDepartmentId}
+                                searchable
+                            />
+                        </Grid.Col>
+                        <Grid.Col span={{ base: 12, sm: 6 }}>
+                            <Select
+                                label="Academic Session"
+                                placeholder="Select a session"
+                                required
+                                data={sessionOptions}
+                                value={sessionId}
+                                onChange={setSessionId}
+                                searchable
+                            />
+                        </Grid.Col>
+                    </Grid>
+                    <Button type="submit" mt="md">Add Section</Button>
+                </form>
+            </Paper>
 
-            {/* --- Add Section Form --- */}
-            <form onSubmit={handleAddSection} className="add-course-form">
-                <input type="text" name="name" placeholder="Section Name (e.g., 1, 2, A)" required />
-                <input type="number" name="year" placeholder="Year (e.g., 1, 2, 3, 4)" required />
-                <select name="department_id" required>
-                    <option value="">Select Department</option>
-                    {departments.map(dept => (
-                        <option key={dept.id} value={dept.id}>{dept.name}</option>
-                    ))}
-                </select>
-                <select name="academic_session_id" required>
-                    <option value="">Select Session</option>
-                    {sessions.map(session => (
-                        <option key={session.id} value={session.id}>{session.year_name}</option>
-                    ))}
-                </select>
-                <button type="submit">Add Section</button>
-            </form>
-
-            {/* --- Sections Table --- */}
-            <div className="log-table-container">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Section Code</th>
-                            <th>Department</th>
-                            <th>Year</th>
-                            <th>Section</th>
-                            <th>Session</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {sections.map(sec => (
-                            <tr key={sec.id}>
-                                <td data-label="Code">{sec.section_code}</td>
-                                <td data-label="Department">{sec.department_name}</td>
-                                <td data-label="Year">{sec.year}</td>
-                                <td data-label="Section">{sec.name}</td>
-                                <td data-label="Session">{sec.session_name}</td>
-                                <td data-label="Actions">
-                                    <button className="action-btn" onClick={() => onEdit(sec)}><FaEdit /></button>
-                                    <button className="action-btn" onClick={() => onDelete(sec.id)}><FaTrash /></button>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
+            <Paper withBorder shadow="md" p={30} mt="xl" radius="md">
+                <Title order={4} mb="md">Existing Sections</Title>
+                <Table striped highlightOnHover withTableBorder withColumnBorders>
+                    <Table.Thead>
+                        <Table.Tr>
+                            <Table.Th>Section Code</Table.Th>
+                            <Table.Th>Department</Table.Th>
+                            <Table.Th>Year</Table.Th>
+                            <Table.Th>Section</Table.Th>
+                            <Table.Th>Session</Table.Th>
+                            <Table.Th>Actions</Table.Th>
+                        </Table.Tr>
+                    </Table.Thead>
+                    <Table.Tbody>{rows}</Table.Tbody>
+                </Table>
+            </Paper>
         </div>
     );
 }

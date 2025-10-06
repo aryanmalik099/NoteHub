@@ -1,42 +1,40 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import api from '../api';
 import { toast } from 'react-toastify';
-import MultiSelectModal from './MultiSelectModal';
-import ActivityLog from './ActivityLog';
+import { Container, Title, Tabs, Loader, Center, Modal, TextInput, NumberInput, Group, Button, Select } from '@mantine/core';
+
+import UserManagement from './UserManagement';
 import CourseManagement from './CourseManagement';
 import DepartmentManagement from './DepartmentManagement';
 import AcademicSessionManagement from './AcademicSessionManagement';
 import SectionManagement from './SectionManagement';
-import './EditNoteModal.css';
+import ActivityLog from './ActivityLog';
 
-function StatCard({ title, value }) {
-    return (
-        <div className="stat-card">
-            <h4>{title}</h4>
-            <p>{value}</p>
-        </div>
-    );
-}
+import MultiSelectModal from './MultiSelectModal';
 
 function AdminPanel() {
     const [users, setUsers] = useState([]);
-    const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(true);
     const [courses, setCourses] = useState([]);
     const [departments, setDepartments] = useState([]);
-    const departmentOptions = departments.map(d => ({ value: d.id, label: `${d.name} (${d.course_short_name})` }));
     const [sessions, setSessions] = useState([]);
     const [sections, setSections] = useState([]);
-    const sectionOptions = sections.map(s => ({ value: s.id, label: `${s.section_code} (${s.session_name})` }));
+    
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [editingItem, setEditingItem] = useState(null);
 
     const [isDeptModalOpen, setIsDeptModalOpen] = useState(false);
     const [currentUserForModal, setCurrentUserForModal] = useState(null);
-
-    const fetchData = async () => {
+    
+    const courseOptions = courses.map(c => ({ value: String(c.id), label: c.name }));
+    const departmentOptions = departments.map(d => ({ value: String(d.id), label: `${d.name} (${d.course_short_name})` }));
+    const sectionOptions = sections.map(s => ({ value: String(s.id), label: `${s.section_code} (${s.session_name})` }));
+    const sessionOptions = sessions.map(s => ({ value: String(s.id), label: s.year_name }));
+    
+    const fetchData = useCallback(async () => {
         try {
-            const [usersResponse, statsResponse, coursesResponse, departmentsResponse, sessionsResponse, sectionsResponse] = await Promise.all([
+            const [usersResponse, coursesResponse, departmentsResponse, sessionsResponse, sectionsResponse] = await Promise.all([
                 api.get('/admin/users'),
-                api.get('/admin/stats'),
                 api.get('/admin/courses'),
                 api.get('/admin/departments'),
                 api.get('/admin/sessions'),
@@ -50,7 +48,6 @@ function AdminPanel() {
             }));
 
             setUsers(enhancedUsers);
-            setStats(statsResponse.data);
             setCourses(coursesResponse.data);
             setDepartments(departmentsResponse.data);
             setSessions(sessionsResponse.data);
@@ -61,11 +58,11 @@ function AdminPanel() {
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
 
     useEffect(() => {
         fetchData();
-    }, []);
+    }, [fetchData]);
 
     const handleRoleChange = async (userId, newRole) => {
         if (!window.confirm(`Are you sure you want to change this user's role to ${newRole}?`)) return;
@@ -88,25 +85,54 @@ function AdminPanel() {
         }
     };
 
-    const handleEditCourse = async (course) => {
-        const newName = prompt("Enter new course name:", course.name);
-        const newShortName = prompt("Enter new short name:", course.short_name);
-        const newDuration = prompt("Enter new duration (years):", course.duration_years);
+    const openEditModal = (item, type) => {
+        setEditingItem({ ...item, type }); // Store the item and its type (e.g., 'course')
+        setIsEditModalOpen(true);
+    };
 
-        if (newName && newShortName && newDuration) {
-            try {
-                await api.put(`/admin/courses/${course.id}`, {
-                    name: newName,
-                    short_name: newShortName,
-                    duration_years: parseInt(newDuration, 10)
-                });
-                toast.success('Course updated!');
-                fetchData();
-            } catch (error) {
-                toast.error('Failed to update course.');
-            }
+    // --- REFACTORED: Single function to handle all update API calls ---
+    const handleUpdate = async () => {
+        if (!editingItem) return;
+        
+        const { type, id, ...data } = editingItem;
+        let endpoint = '';
+        let payload = {};
+
+        // Determine the correct API endpoint and payload based on the item's type
+        switch (type) {
+            case 'course':
+                endpoint = `/admin/courses/${id}`;
+                payload = { name: data.name, short_name: data.short_name, duration_years: Number(data.duration_years) };
+                break;
+            case 'department':
+                endpoint = `/admin/departments/${id}`;
+                payload = { name: data.name, short_name: data.short_name, course_id: Number(data.course_id) };
+                break;
+            case 'section':
+                endpoint = `/admin/sections/${id}`;
+                payload = { name: data.name, year: Number(data.year), department_id: Number(data.department_id), academic_session_id: Number(data.academic_session_id) };
+                break;
+            default:
+                toast.error("Unknown item type.");
+                return;
+        }
+
+        try {
+            await api.put(endpoint, payload);
+            toast.success(`${type.charAt(0).toUpperCase() + type.slice(1)} updated successfully!`);
+            setIsEditModalOpen(false);
+            fetchData();
+        } catch (error) {
+            toast.error(`Failed to update ${type}.`);
         }
     };
+    const handleEditFormChange = (field, value) => {
+        setEditingItem(currentItem => ({
+            ...currentItem,
+            [field]: value
+        }));
+    };
+
 
     const handleDeleteCourse = async (courseId) => {
         if (window.confirm("Are you sure you want to delete this course?")) {
@@ -127,25 +153,6 @@ function AdminPanel() {
             fetchData();
         } catch (error) {
             toast.error(error.response?.data?.error || 'Failed to add department.');
-        }
-    };
-
-    const handleEditDepartment = async (dept) => {
-        const newName = prompt("Enter new department name:", dept.name);
-        const newShortName = prompt("Enter new short name:", dept.short_name);
-
-        if (newName && newShortName) {
-            try {
-                await api.put(`/admin/departments/${dept.id}`, {
-                    name: newName,
-                    short_name: newShortName,
-                    course_id: dept.course_id
-                });
-                toast.success('Department updated!');
-                fetchData();
-            } catch (error) {
-                toast.error('Failed to update department.');
-            }
         }
     };
 
@@ -216,25 +223,6 @@ function AdminPanel() {
         }
     };
 
-    const handleEditSection = async (section) => {
-        const newName = prompt("Enter new section name (e.g., 'A', '1'):", section.name);
-        const newYear = prompt("Enter new year (e.g., 1, 2, 3, 4):", section.year);
-
-        if (newName && newYear) {
-            try {
-                await api.put(`/admin/sections/${section.id}`, {
-                    ...section,
-                    name: newName,
-                    year: parseInt(newYear, 10)
-                });
-                toast.success('Section updated!');
-                fetchData();
-            } catch (error) {
-                toast.error('Failed to update section.');
-            }
-        }
-    };
-
     const handleStudentSectionChange = async (userId, sectionId) => {
         try {
             await api.put(`/admin/students/${userId}/section`, { section_id: sectionId });
@@ -263,122 +251,112 @@ function AdminPanel() {
         setIsDeptModalOpen(true);
     };
 
-    if (loading) return <div>Loading Admin Panel...</div>;
+    if (loading) {
+        return <Center style={{ height: 300 }}><Loader /></Center>;
+    }
 
     return (
-        <div className="admin-panel form-container-admin">
-            {stats && (
-                <div className="dashboard-section">
-                    <h2>Dashboard</h2>
-                    <div className="stats-grid">
-                        <StatCard title="Total Users" value={stats.total_users} />
-                        <StatCard title="Total Notes" value={stats.total_notes} />
-                    </div>
-                    <div className="recent-activity-grid">
-                        <div>
-                            <h4>Recent Registrations</h4>
-                            <ul>{stats.recent_users.map(u => <li key={u.id}>{u.username} ({u.email})</li>)}</ul>
-                        </div>
-                        <div>
-                            <h4>Recent Uploads</h4>
-                            <ul>{stats.recent_notes.map(n => <li key={n.id}>{n.title} (by {n.author})</li>)}</ul>
-                        </div>
-                    </div>
-                </div>
-            )}
+        <Container fluid my="md">
+            <Title order={2} mb="xl">Admin Panel</Title>
+            <Tabs defaultValue="courses">
+                <Tabs.List>
+                    <Tabs.Tab value="users">Users</Tabs.Tab>
+                    <Tabs.Tab value="courses">Courses</Tabs.Tab>
+                    <Tabs.Tab value="departments">Departments</Tabs.Tab>
+                    <Tabs.Tab value="sessions">Sessions</Tabs.Tab>
+                    <Tabs.Tab value="sections">Sections</Tabs.Tab>
+                    <Tabs.Tab value="logs">Activity Logs</Tabs.Tab>
+                </Tabs.List>
 
-            <hr className="form-divider" />
+                <Tabs.Panel value="users" pt="lg">
+                   <UserManagement
+                        users={users}
+                        sections={sectionOptions}
+                        onRoleChange={handleRoleChange}
+                        onStudentSectionChange={handleStudentSectionChange}
+                        onManageProfessorDepts={openDeptModal}
+                   />
+                </Tabs.Panel>
+                
+                <Tabs.Panel value="courses" pt="lg">
+                    <CourseManagement 
+                        courses={courses}
+                        onAdd={handleAddCourse}
+                        onEdit={(item) => openEditModal(item, 'course')}
+                        onDelete={handleDeleteCourse}
+                    />
+                </Tabs.Panel>
+                
+                <Tabs.Panel value="departments" pt="lg">
+                    <DepartmentManagement
+                        departments={departments}
+                        courses={courses}
+                        onAdd={handleAddDepartment}
+                        onEdit={(item) => openEditModal(item, 'department')}
+                        onDelete={handleDeleteDepartment}
+                    />
+                </Tabs.Panel>
 
-            <AcademicSessionManagement
-                sessions={sessions}
-                onAdd={handleAddSession}
-                onSetActive={handleSetActiveSession}
-                onDelete={handleDeleteSession}
-            />
+                <Tabs.Panel value="sessions" pt="lg">
+                    <AcademicSessionManagement
+                        sessions={sessions}
+                        onAdd={handleAddSession}
+                        onSetActive={handleSetActiveSession}
+                        onDelete={handleDeleteSession}
+                    />
+                </Tabs.Panel>
 
-            <hr className="form-divider" />
+                <Tabs.Panel value="sections" pt="lg">
+                    <SectionManagement
+                        sections={sections}
+                        departments={departments}
+                        sessions={sessions}
+                        onAdd={handleAddSection}
+                        onEdit={(item) => openEditModal(item, 'section')}
+                        onDelete={handleDeleteSection}
+                    />
+                </Tabs.Panel>
 
-            <CourseManagement 
-                courses={courses}
-                onAdd={handleAddCourse}
-                onEdit={handleEditCourse}
-                onDelete={handleDeleteCourse}
-            />
+                <Tabs.Panel value="logs" pt="lg">
+                    <ActivityLog />
+                </Tabs.Panel>
+            </Tabs>
 
-            <hr className="form-divider" />
+            <Modal opened={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} title={`Edit ${editingItem?.type || ''}`}>
+                {editingItem && (
+                    <form onSubmit={(e) => { e.preventDefault(); handleUpdate(); }}>
+                        {/* Dynamically render form fields using the new, safe handler */}
+                        {editingItem.type === 'course' && (
+                            <>
+                                <TextInput label="Course Name" required value={editingItem.name} onChange={(e) => handleEditFormChange('name', e.currentTarget.value)} />
+                                <TextInput label="Short Name" required mt="md" value={editingItem.short_name} onChange={(e) => handleEditFormChange('short_name', e.currentTarget.value)} />
+                                <NumberInput label="Duration (Years)" required mt="md" value={editingItem.duration_years} onChange={(val) => handleEditFormChange('duration_years', val)} min={1} />
+                            </>
+                        )}
+                        {editingItem.type === 'department' && (
+                            <>
+                                <TextInput label="Department Name" required value={editingItem.name} onChange={(e) => handleEditFormChange('name', e.currentTarget.value)} />
+                                <TextInput label="Short Name" required mt="md" value={editingItem.short_name} onChange={(e) => handleEditFormChange('short_name', e.currentTarget.value)} />
+                                <Select label="Parent Course" required mt="md" data={courseOptions} value={String(editingItem.course_id)} onChange={(val) => handleEditFormChange('course_id', val)} />
+                            </>
+                        )}
+                        {editingItem.type === 'section' && (
+                            <>
+                                <TextInput label="Section Name" required value={editingItem.name} onChange={(e) => handleEditFormChange('name', e.currentTarget.value)} />
+                                <NumberInput label="Year" required mt="md" value={editingItem.year} onChange={(val) => handleEditFormChange('year', val)} />
+                                <Select label="Department" required mt="md" data={departmentOptions} value={String(editingItem.department_id)} onChange={(val) => handleEditFormChange('department_id', val)} />
+                                <Select label="Academic Session" required mt="md" data={sessionOptions} value={String(editingItem.academic_session_id)} onChange={(val) => handleEditFormChange('academic_session_id', val)} />
+                            </>
+                        )}
 
-            <DepartmentManagement
-                departments={departments}
-                courses={courses}
-                onAdd={handleAddDepartment}
-                onEdit={handleEditDepartment}
-                onDelete={handleDeleteDepartment}
-            />
+                        <Group justify="flex-end" mt="xl">
+                            <Button variant="default" onClick={() => setIsEditModalOpen(false)}>Cancel</Button>
+                            <Button type="submit">Save Changes</Button>
+                        </Group>
+                    </form>
+                )}
+            </Modal>
 
-            <hr className="form-divider" />
-
-            <SectionManagement
-                sections={sections}
-                departments={departments}
-                sessions={sessions}
-                onAdd={handleAddSection}
-                onEdit={handleEditSection}
-                onDelete={handleDeleteSection}
-            />
-
-            <hr className="form-divider" />
-            
-            <ActivityLog />
-            
-            <hr className="form-divider" />
-
-            <h2>User Management</h2>
-            <div className="log-table-container">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Username</th>
-                            <th>Email</th>
-                            <th>Role</th>
-                            <th>Assignment</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {users.map(user => (
-                            <tr key={user.id}>
-                                <td data-label="Username">{user.username}</td>
-                                <td data-label="Email">{user.email}</td>
-                                <td data-label="Role">
-                                    <select onChange={(e) => handleRoleChange(user.id, e.target.value)} value={user.role}>
-                                        <option value="student">Student</option>
-                                        <option value="moderator">Moderator</option>
-                                        <option value="professor">Professor</option>
-                                        <option value="super_admin">Super Admin</option>
-                                    </select>
-                                </td>
-                                <td data-label="Assignment">
-                                    {user.role === 'student' && (
-                                        <select
-                                            value={user.section_id || ''}
-                                            onChange={(e) => handleStudentSectionChange(user.id, e.target.value ? parseInt(e.target.value, 10) : null)}
-                                        >
-                                            <option value="">-- Unassigned --</option>
-                                            {sectionOptions.map(opt => (
-                                                <option key={opt.value} value={opt.value}>{opt.label}</option>
-                                            ))}
-                                        </select>
-                                    )}
-                                    {user.role === 'professor' && (
-                                        <button onClick={() => openDeptModal(user)}>
-                                            Manage Departments ({user.departments_taught.length})
-                                        </button>
-                                    )}
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
             {isDeptModalOpen && (
                 <MultiSelectModal
                     title={`Assign Departments for ${currentUserForModal.username}`}
@@ -388,7 +366,7 @@ function AdminPanel() {
                     onCancel={() => setIsDeptModalOpen(false)}
                 />
             )}
-        </div>
+        </Container>
     );
 }
 

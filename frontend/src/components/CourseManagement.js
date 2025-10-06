@@ -1,60 +1,89 @@
-import React from 'react';
-import { FaEdit, FaTrash } from 'react-icons/fa';
+import React, { useState } from 'react';
+import { Table, Button, Group, TextInput, NumberInput, Paper, Title } from '@mantine/core';
 
-// This component will be "dumb" - it just receives data and functions as props
+// This component is now a "presentational" component. 
+// It receives data and functions from its parent (AdminPanel).
 function CourseManagement({ courses, onAdd, onEdit, onDelete }) {
+    // State for the "Add Course" form
+    const [name, setName] = useState('');
+    const [shortName, setShortName] = useState('');
+    const [duration, setDuration] = useState('');
+
     const handleAddCourse = (e) => {
         e.preventDefault();
-        const form = e.target;
-        const newCourse = {
-            name: form.name.value,
-            short_name: form.short_name.value,
-            duration_years: parseInt(form.duration_years.value, 10)
-        };
-        onAdd(newCourse);
-        form.reset(); // Clear the form after submission
+        onAdd({
+            name: name,
+            short_name: shortName,
+            duration_years: Number(duration)
+        });
+        // Clear the form
+        setName('');
+        setShortName('');
+        setDuration('');
     };
 
-    return (
-        <div className="admin-section">
-            <h2>Manage Courses</h2>
-            
-            {/* --- Add Course Form --- */}
-            <form onSubmit={handleAddCourse} className="add-course-form">
-                <input type="text" name="name" placeholder="Course Name (e.g., Bachelor of Technology)" required />
-                <input type="text" name="short_name" placeholder="Short Name (e.g., B.Tech)" required />
-                <input type="number" name="duration_years" placeholder="Duration (Years)" required />
-                <button type="submit">Add Course</button>
-            </form>
+    const rows = courses.map((course) => (
+        <Table.Tr key={course.id}>
+            <Table.Td>{course.id}</Table.Td>
+            <Table.Td>{course.name}</Table.Td>
+            <Table.Td>{course.short_name}</Table.Td>
+            <Table.Td>{course.duration_years} years</Table.Td>
+            <Table.Td>
+                <Group gap="xs">
+                    <Button variant="outline" size="xs" onClick={() => onEdit(course)}>Edit</Button>
+                    <Button variant="outline" color="red" size="xs" onClick={() => onDelete(course.id)}>Delete</Button>
+                </Group>
+            </Table.Td>
+        </Table.Tr>
+    ));
 
-            {/* --- Courses Table --- */}
-            <div className="log-table-container">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Name</th>
-                            <th>Short Name</th>
-                            <th>Duration</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {courses.map(course => (
-                            <tr key={course.id}>
-                                <td data-label="ID">{course.id}</td>
-                                <td data-label="Name">{course.name}</td>
-                                <td data-label="Short Name">{course.short_name}</td>
-                                <td data-label="Duration">{course.duration_years} years</td>
-                                <td data-label="Actions">
-                                    <button className="action-btn" onClick={() => onEdit(course)}><FaEdit /></button>
-                                    <button className="action-btn" onClick={() => onDelete(course.id)}><FaTrash /></button>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
+    return (
+        <div>
+            <Paper withBorder shadow="md" p={30} mt="md" radius="md">
+                <Title order={4} mb="md">Add New Course</Title>
+                <form onSubmit={handleAddCourse}>
+                    <Group grow>
+                        <TextInput
+                            label="Course Name"
+                            placeholder="e.g., Bachelor of Technology"
+                            required
+                            value={name}
+                            onChange={(e) => setName(e.currentTarget.value)}
+                        />
+                        <TextInput
+                            label="Short Name"
+                            placeholder="e.g., B.Tech"
+                            required
+                            value={shortName}
+                            onChange={(e) => setShortName(e.currentTarget.value)}
+                        />
+                        <NumberInput
+                            label="Duration (Years)"
+                            placeholder="e.g., 4"
+                            required
+                            value={duration}
+                            onChange={setDuration}
+                            min={1}
+                        />
+                    </Group>
+                    <Button type="submit" mt="md">Add Course</Button>
+                </form>
+            </Paper>
+
+            <Paper withBorder shadow="md" p={30} mt="xl" radius="md">
+                <Table striped highlightOnHover withTableBorder>
+                    <Table.Thead>
+                        <Table.Tr>
+                            <Table.Th>ID</Table.Th>
+                            <Table.Th>Name</Table.Th>
+                            <Table.Th>Short Name</Table.Th>
+                            <Table.Th>Duration</Table.Th>
+                            <Table.Th>Actions</Table.Th>
+                        </Table.Tr>
+                    </Table.Thead>
+                    <Table.Tbody>{rows}</Table.Tbody>
+                </Table>
+            </Paper>
         </div>
     );
 }

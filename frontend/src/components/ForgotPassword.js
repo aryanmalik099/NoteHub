@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import api from '../api';
 import { toast } from 'react-toastify';
+import { Container, Paper, Title, TextInput, Button, Text } from '@mantine/core';
 
 function ForgotPassword() {
     const [email, setEmail] = useState('');
@@ -16,23 +17,30 @@ function ForgotPassword() {
     };
 
     return (
-        <div className="form-container">
-            <h2>Forgot Password</h2>
-            <p>Enter your email address and we will send you a link to reset your password.</p>
-            <form onSubmit={handleSubmit}>
-                <div className="form-group">
-                    <label htmlFor="email">Email</label>
-                    <input
-                        id="email"
+        <Container size={420} my={40}>
+            <Title ta="center">
+                Forgot Your Password?
+            </Title>
+            <Text c="dimmed" size="sm" ta="center" mt={5}>
+                Enter your email to get a reset link
+            </Text>
+
+            <Paper withBorder shadow="md" p={30} mt={30} radius="md">
+                <form onSubmit={handleSubmit}>
+                    <TextInput
+                        label="Your Email"
+                        placeholder="you@imsec.ac.in"
+                        required
                         type="email"
                         value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        required
+                        onChange={(e) => setEmail(e.currentTarget.value)}
                     />
-                </div>
-                <button type="submit">Send Reset Link</button>
-            </form>
-        </div>
+                    <Button fullWidth mt="xl" type="submit">
+                        Send Reset Link
+                    </Button>
+                </form>
+            </Paper>
+        </Container>
     );
 }
 

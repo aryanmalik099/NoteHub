@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link, Navigate } from 'react-router-dom';
-import { FaBars, FaTimes } from 'react-icons/fa'; // Icons for the menu
+import { BrowserRouter as Router, Routes, Route, Link as RouterLink, Navigate } from 'react-router-dom';
 import Signup from './components/Signup';
 import Login from './components/Login';
 import ProfilePage from './components/ProfilePage';
@@ -10,9 +9,12 @@ import AdminPanel from './components/AdminPanel';
 import NoteUpload from './components/NoteUpload';
 import NoteList from './components/NoteList';
 import logo from './logo.png';
-import './App.css';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import './App.css';
+
+import { MantineProvider, AppShell, Burger, Group, Button, Image } from '@mantine/core';
+import { useDisclosure } from '@mantine/hooks';
 
 const ProtectedRoute = ({ isLoggedIn, children }) => {
   if (!isLoggedIn) { return <Navigate to="/login" replace />; }
@@ -21,7 +23,7 @@ const ProtectedRoute = ({ isLoggedIn, children }) => {
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [isMenuOpen, setIsMenuOpen] = useState(false); // State for mobile menu
+  const [opened, { toggle }] = useDisclosure();
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -29,59 +31,78 @@ function App() {
   }, []);
 
   const handleLogout = () => {
-    localStorage.clear(); // Clears all stored items (token, role, etc.)
+    localStorage.clear();
     setIsLoggedIn(false);
   };
-  
-  const closeMenu = () => setIsMenuOpen(false); // Function to close the menu
 
   return (
-    <Router>
-      <ToastContainer position="top-right" autoClose={5000} theme="light" />
-      
-      {/* This overlay will dim the background when the menu is open */}
-      {isMenuOpen && <div className="overlay" onClick={closeMenu}></div>}
+    <MantineProvider>
+      <Router>
+        <ToastContainer position="top-right" autoClose={5000} theme="light" />
+        <AppShell
+          header={{ height: 60 }}
+          navbar={{ width: 300, breakpoint: 'sm', collapsed: { desktop: true, mobile: !opened } }}
+          padding="md"
+        >
+          <AppShell.Header>
+            <Group h="100%" px="md" justify="space-between">
+              <Group>
+                <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" />
+                <RouterLink to="/">
+                  <Image src={logo} alt="NoteHub" h={40} />
+                </RouterLink>
+              </Group>
+              <Group visibleFrom="sm">
+                <Button component={RouterLink} to="/" variant="subtle">Home</Button>
+                {isLoggedIn ? (
+                  <>
+                    {localStorage.getItem('userRole') === 'super_admin' && <Button component={RouterLink} to="/admin" variant="subtle">Admin Panel</Button>}
+                    <Button component={RouterLink} to="/upload" variant="subtle">Upload Note</Button>
+                    <Button component={RouterLink} to="/profile" variant="subtle">Profile</Button>
+                    <Button variant="subtle" onClick={handleLogout} component={RouterLink} to="/login">Logout</Button>
+                  </>
+                ) : (
+                  <>
+                    <Button component={RouterLink} to="/login" variant="subtle">Login</Button>
+                    <Button component={RouterLink} to="/signup">Sign Up</Button>
+                  </>
+                )}
+              </Group>
+            </Group>
+          </AppShell.Header>
 
-      <header className="App-header">
-        <h1><Link to="/" onClick={closeMenu}><img src={logo} alt="NoteHub"/></Link></h1>
-        
-        {/* The nav menu now has a conditional class to slide it into view */}
-        <nav className={isMenuOpen ? "nav-menu active" : "nav-menu"}>
-          <Link to="/" onClick={closeMenu}>Home</Link>
-          {isLoggedIn ? (
-            <>
-              {localStorage.getItem('userRole') === 'super_admin' && <Link to="/admin" onClick={closeMenu}>Admin Panel</Link>}
-              <Link to="/upload" onClick={closeMenu}>Upload Note</Link>
-              <Link to="/profile" onClick={closeMenu}>Profile</Link>
-              <Link to="/login" onClick={() => { closeMenu(); handleLogout(); }}>Logout</Link>
-            </>
-          ) : (
-            <>
-              <Link to="/login" onClick={closeMenu}>Login</Link>
-              <Link to="/signup" onClick={closeMenu}>Sign Up</Link>
-            </>
-          )}
-        </nav>
+          <AppShell.Navbar py="md" px={4}>
+            <Button component={RouterLink} to="/" variant="subtle" onClick={toggle}>Home</Button>
+            {isLoggedIn ? (
+              <>
+                {localStorage.getItem('userRole') === 'super_admin' && <Button component={RouterLink} to="/admin" variant="subtle" onClick={toggle}>Admin Panel</Button>}
+                <Button component={RouterLink} to="/upload" variant="subtle" onClick={toggle}>Upload Note</Button>
+                <Button component={RouterLink} to="/profile" variant="subtle" onClick={toggle}>Profile</Button>
+                <Button variant="subtle" onClick={() => { handleLogout(); toggle(); }} component={RouterLink} to="/login">Logout</Button>
+              </>
+            ) : (
+              <>
+                <Button component={RouterLink} to="/login" variant="subtle" onClick={toggle}>Login</Button>
+                <Button component={RouterLink} to="/signup" onClick={toggle}>Sign Up</Button>
+              </>
+            )}
+          </AppShell.Navbar>
 
-        {/* This button toggles the menu's visibility */}
-        <div className="hamburger" onClick={() => setIsMenuOpen(!isMenuOpen)}>
-          {isMenuOpen ? <FaTimes /> : <FaBars />}
-        </div>
-      </header>
-      
-      <main>
-        <Routes>
-          <Route path="/" element={<NoteList />} />
-          <Route path="/login" element={isLoggedIn ? <Navigate to="/" /> : <Login setIsLoggedIn={setIsLoggedIn} />} />
-          <Route path="/signup" element={isLoggedIn ? <Navigate to="/" /> : <Signup />} />
-          <Route path="/forgot-password" element={<ForgotPassword />} />
-          <Route path="/reset-password/:token" element={<ResetPassword />} />
-          <Route path="/upload" element={<ProtectedRoute isLoggedIn={isLoggedIn}><NoteUpload /></ProtectedRoute>} />
-          <Route path="/profile" element={<ProtectedRoute isLoggedIn={isLoggedIn}><ProfilePage /></ProtectedRoute>} />
-          <Route path="/admin" element={<ProtectedRoute isLoggedIn={isLoggedIn}><AdminPanel /></ProtectedRoute>} />
-        </Routes>
-      </main>
-    </Router>
+          <AppShell.Main>
+            <Routes>
+              <Route path="/" element={<NoteList />} />
+              <Route path="/login" element={isLoggedIn ? <Navigate to="/" /> : <Login setIsLoggedIn={setIsLoggedIn} />} />
+              <Route path="/signup" element={isLoggedIn ? <Navigate to="/" /> : <Signup />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
+              <Route path="/reset-password/:token" element={<ResetPassword />} />
+              <Route path="/upload" element={<ProtectedRoute isLoggedIn={isLoggedIn}><NoteUpload /></ProtectedRoute>} />
+              <Route path="/profile" element={<ProtectedRoute isLoggedIn={isLoggedIn}><ProfilePage /></ProtectedRoute>} />
+              <Route path="/admin" element={<ProtectedRoute isLoggedIn={isLoggedIn}><AdminPanel /></ProtectedRoute>} />
+            </Routes>
+          </AppShell.Main>
+        </AppShell>
+      </Router>
+    </MantineProvider>
   );
 }
 

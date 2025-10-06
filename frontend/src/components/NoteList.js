@@ -1,138 +1,180 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import api from '../api';
-import { FaTrash } from 'react-icons/fa';
+import { Card, Grid, TextInput, Switch, Button, Text, Badge, Group, Paper, Loader, Center, Pagination } from '@mantine/core';
 
-
-function NotesList() {
+function NoteList() {
     const [notes, setNotes] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
     const [totalPages, setTotalPages] = useState(0);
-
     const [filters, setFilters] = useState({
         title: '',
         subject: '',
         academic_year: '',
         verified: false
     });
-    const currentUserRole = localStorage.getItem('userRole');
-
-    const handleFilterChange = (e) => {
-        const { name, value, type, checked } = e.target;
-        setFilters({
-            ...filters,
-            [name]: type === 'checkbox' ? checked : value
-        });
-        setCurrentPage(1);
-    };
 
     const fetchNotes = useCallback(async (searchParams, page) => {
         setLoading(true);
+        setError('');
         try {
-            const nonEmptyParams = Object.fromEntries(
-                Object.entries(searchParams).filter(([key, value]) => {
-                    return value !== '' && value !== false;
-                })
-            );
-            const params = { ...nonEmptyParams, page: page };
+            const params = { page };
+            if (searchParams.title) params.title = searchParams.title;
+            if (searchParams.subject) params.subject = searchParams.subject;
+            if (searchParams.academic_year) params.academic_year = searchParams.academic_year;
+            // The backend expects the string 'true' for this filter
+            if (searchParams.verified) params.verified = 'true';
+
             const response = await api.get('/notes', { params });
-            
-            setNotes(response.data.notes);
-            setTotalPages(response.data.total_pages);
-            setCurrentPage(response.data.current_page);
+
+            if (Array.isArray(response.data.notes)) {
+                setNotes(response.data.notes);
+                setTotalPages(response.data.total_pages);
+                setCurrentPage(response.data.current_page);
+            } else {
+                setError('Received unexpected data from server.');
+                setNotes([]);
+            }
         } catch (err) {
-            setError('Failed to fetch notes.');
+            setError('Failed to fetch notes. The server might be down.');
         } finally {
             setLoading(false);
         }
     }, []);
 
-    // Effect for handling live search with debouncing
     useEffect(() => {
         const timer = setTimeout(() => {
             fetchNotes(filters, 1);
         }, 500);
-
         return () => clearTimeout(timer);
     }, [filters, fetchNotes]);
 
-    // 4. Function to handle page changes
     const handlePageChange = (newPage) => {
         if (newPage >= 1 && newPage <= totalPages) {
             fetchNotes(filters, newPage);
         }
     };
-
-    const handleDelete = async (noteId) => {
-        if (!window.confirm("As a moderator, are you sure?")) return;
-        try {
-            await api.delete(`/notes/${noteId}`);
-            // Refetch the current page to show the updated list
-            fetchNotes(filters, currentPage);
-        } catch (err) {
-            setError('Failed to delete note.');
-        }
+    
+    // --- THIS IS THE FINAL FIX ---
+    // This single handler is now robust enough for all inputs.
+    // It reads the name, value, type, and checked status from the event *immediately*.
+    const handleFilterChange = (event) => {
+        const { name, value, type, checked } = event.currentTarget;
+        
+        // Use the stored value (not the event object) to update the state.
+        setFilters(currentFilters => ({
+            ...currentFilters,
+            [name]: type === 'checkbox' ? checked : value
+        }));
     };
+
+    if (error) {
+        return <Text c="red" ta="center" mt="xl">{error}</Text>;
+    }
 
     return (
         <div>
-            <div className="search-form">
-                <h3>Search Notes</h3>
-                <input type="text" name="title" placeholder="Search by Title..." value={filters.title} onChange={handleFilterChange} />
-                <input type="text" name="subject" placeholder="Filter by Subject..." value={filters.subject} onChange={handleFilterChange} />
-                <input type="text" name="academic_year" placeholder="Filter by Year..." value={filters.academic_year} onChange={handleFilterChange} />
-                <div className="form-group checkbox-group">
-                    <input
-                        type="checkbox"
-                        id="verified"
-                        name="verified"
-                        checked={filters.verified}
-                        onChange={handleFilterChange}
-                    />
-                    <label htmlFor="verified">Show Verified Only ✔️</label>
-                </div>
-            </div>
-            <hr />
-            <h2>All Notes</h2>
-            {error && <p style={{ color: 'red' }}>{error}</p>}
-            
-            {loading ? ( <p>Searching...</p> ) : (
-                <>
-                    <div className="notes-grid">
-                        {notes.length > 0 ? notes.map(note => (
-                            <div key={note.id} className="note-card">
-                                <h3>
-                                    {note.title}
-                                    {note.is_verified && <span className="verified-badge">✔️ Verified</span>}
-                                </h3>
-                                <p><strong>Subject:</strong> {note.subject}</p>
-                                <p><strong>Semester:</strong> {note.semester}</p>
-                                <p><strong>Year:</strong> {note.academic_year}</p>
-                                <a href={note.file_url} target="_blank" rel="noopener noreferrer">Download Note</a>
-                                <p><em>by {note.author_username}</em></p>
-                                {['moderator', 'super_admin'].includes(currentUserRole) && (
-                                    <div className="note-actions">
-                                        <button onClick={() => handleDelete(note.id)}><FaTrash />Delete ({currentUserRole})</button>
-                                    </div>
-                                )}
-                            </div>
-                        )) : <p>No notes found for your search.</p>}
-                    </div>
+            <Paper p="md" shadow="sm" withBorder mb="xl">
+                <Grid align="flex-end" gutter="md">
+                    <Grid.Col span={{ base: 12, sm: 6, md: 4 }}>
+                        <TextInput
+                            label="Search by Title"
+                            placeholder="e.g., Physics Midterm"
+                            name="title"
+                            value={filters.title}
+                            onChange={handleFilterChange}
+                        />
+                    </Grid.Col>
+                    <Grid.Col span={{ base: 12, sm: 6, md: 4 }}>
+                        <TextInput
+                            label="Filter by Subject"
+                            placeholder="e.g., PHY-101"
+                            name="subject"
+                            value={filters.subject}
+                            onChange={handleFilterChange}
+                        />
+                    </Grid.Col>
+                    <Grid.Col span={{ base: 12, sm: 6, md: 4 }}>
+                        <TextInput
+                            label="Filter by Year"
+                            placeholder="e.g., 2023"
+                            name="academic_year"
+                            value={filters.academic_year}
+                            onChange={handleFilterChange}
+                        />
+                    </Grid.Col>
+                    <Grid.Col span={{ base: 12, sm: 6, md: 4 }} mt="xs">
+                         <Switch
+                            label="Show Verified Only"
+                            name="verified"
+                            checked={filters.verified}
+                            onChange={handleFilterChange}
+                        />
+                    </Grid.Col>
+                </Grid>
+            </Paper>
 
-                    <div className="pagination-controls">
-                        <button onClick={() => handlePageChange(currentPage - 1)} disabled={currentPage <= 1}>
-                            &laquo; Previous
-                        </button>
-                        <span>Page {currentPage} of {totalPages}</span>
-                        <button onClick={() => handlePageChange(currentPage + 1)} disabled={currentPage >= totalPages}>
-                            Next &raquo;
-                        </button>
-                    </div>
+            {loading ? (
+                <Center style={{ height: 300 }}><Loader /></Center>
+            ) : (
+                <>
+                    <Grid>
+                        {notes.length > 0 ? (
+                            notes.map(note => (
+                                <Grid.Col key={note.id} span={{ base: 12, md: 6, lg: 4 }}>
+                                    <Card shadow="sm" padding="lg" radius="md" withBorder>
+                                        <Group justify="space-between" mt="md" mb="xs">
+                                            <Text fw={500}>{note.title}</Text>
+                                            {note.is_verified && (
+                                                <Badge color="green" variant="light">
+                                                    Verified
+                                                </Badge>
+                                            )}
+                                        </Group>
+                                        <Text size="sm" c="dimmed">Subject: {note.subject}</Text>
+                                        <Text size="sm" c="dimmed">Semester: {note.semester}</Text>
+                                        <Text size="sm" c="dimmed">Year: {note.academic_year}</Text>
+                                        <Text size="sm" c="dimmed" mt="sm">
+                                            Uploaded by: {note.author_username}
+                                        </Text>
+                                        <Button
+                                            component="a"
+                                            href={note.file_url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            variant="light"
+                                            color="blue"
+                                            fullWidth
+                                            mt="md"
+                                            radius="md"
+                                        >
+                                            Download Note
+                                        </Button>
+                                    </Card>
+                                </Grid.Col>
+                            ))
+                        ) : (
+                            <Grid.Col span={12}>
+                                <Text ta="center" c="dimmed" mt="xl">
+                                    No notes found for your search.
+                                </Text>
+                            </Grid.Col>
+                        )}
+                    </Grid>
+                    
+                    <Center mt="xl">
+                        <Pagination
+                            total={totalPages}
+                            value={currentPage}
+                            onChange={handlePageChange}
+                            disabled={totalPages === 0}
+                        />
+                    </Center>
                 </>
             )}
         </div>
     );
 }
 
-export default NotesList;
+export default NoteList;
