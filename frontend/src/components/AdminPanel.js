@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, startTransition } from 'react';
 import api from '../api';
 import { toast } from 'react-toastify';
-import { Container, Title, Tabs, Loader, Center, Modal, TextInput, NumberInput, Group, Button, Select } from '@mantine/core';
+import { Container, Title, Tabs, Loader, Center, Modal, TextInput, NumberInput, Group, Button, Select, ScrollArea } from '@mantine/core';
 
 import UserManagement from './UserManagement';
 import CourseManagement from './CourseManagement';
@@ -26,10 +26,22 @@ function AdminPanel() {
     const [isDeptModalOpen, setIsDeptModalOpen] = useState(false);
     const [currentUserForModal, setCurrentUserForModal] = useState(null);
     
-    const courseOptions = courses.map(c => ({ value: String(c.id), label: c.name }));
-    const departmentOptions = departments.map(d => ({ value: String(d.id), label: `${d.name} (${d.course_short_name})` }));
-    const sectionOptions = sections.map(s => ({ value: String(s.id), label: `${s.section_code} (${s.session_name})` }));
-    const sessionOptions = sessions.map(s => ({ value: String(s.id), label: s.year_name }));
+    const courseOptions = useMemo(
+        () => courses.map(c => ({ value: String(c.id), label: c.name })),
+        [courses]
+    );
+    const departmentOptions = useMemo(
+        () => departments.map(d => ({ value: String(d.id), label: `${d.name} (${d.course_short_name})` })),
+        [departments]
+    );
+    const sectionOptions = useMemo(
+        () => sections.map(s => ({ value: String(s.id), label: `${s.section_code} (${s.session_name})` })),
+        [sections]
+    );
+    const sessionOptions = useMemo(
+        () => sessions.map(s => ({ value: String(s.id), label: s.year_name })),
+        [sessions]
+    );
     
     const fetchData = useCallback(async () => {
         try {
@@ -66,11 +78,17 @@ function AdminPanel() {
 
     const handleRoleChange = async (userId, newRole) => {
         if (!window.confirm(`Are you sure you want to change this user's role to ${newRole}?`)) return;
+        const prevUsers = users;
+        // Optimistically update role locally
+        startTransition(() => {
+            setUsers(prev => prev.map(u => (u.id === userId ? { ...u, role: newRole } : u)));
+        });
         try {
             const response = await api.put(`/admin/users/${userId}/role`, { role: newRole });
             toast.success(response.data.message);
-            fetchData();
         } catch (error) {
+            // Revert on failure
+            startTransition(() => { setUsers(prevUsers); });
             toast.error('Failed to update user role.');
         }
     };
@@ -90,7 +108,6 @@ function AdminPanel() {
         setIsEditModalOpen(true);
     };
 
-    // --- REFACTORED: Single function to handle all update API calls ---
     const handleUpdate = async () => {
         if (!editingItem) return;
         
@@ -98,7 +115,6 @@ function AdminPanel() {
         let endpoint = '';
         let payload = {};
 
-        // Determine the correct API endpoint and payload based on the item's type
         switch (type) {
             case 'course':
                 endpoint = `/admin/courses/${id}`;
@@ -224,22 +240,48 @@ function AdminPanel() {
     };
 
     const handleStudentSectionChange = async (userId, sectionId) => {
+        // Optimistically update local state to avoid heavy refetch
+        const prevUsers = users;
+        const depIdForSection = (sid) => {
+            if (!sid) return null;
+            const sec = sections.find(s => s.id === sid);
+            return sec ? sec.department_id : null;
+        };
+        startTransition(() => {
+            setUsers(prev => prev.map(u => (
+                u.id === userId
+                    ? { ...u, section_id: sectionId, department_id: depIdForSection(sectionId) }
+                    : u
+            )));
+        });
+
         try {
             await api.put(`/admin/students/${userId}/section`, { section_id: sectionId });
             toast.success("Student's section updated!");
-            fetchData(); // Refresh all data to ensure consistency
         } catch (error) {
+            // Revert on failure
+            startTransition(() => { setUsers(prevUsers); });
             toast.error("Failed to update student's section.");
         }
     };
 
     const handleProfessorDeptsChange = async (selectedOptions) => {
         const departmentIds = selectedOptions ? selectedOptions.map(opt => opt.value) : [];
+        const prevUsers = users;
+        // Optimistically update departments_taught for the current user
+        startTransition(() => {
+            setUsers(prev => prev.map(u => (
+                u.id === currentUserForModal.id
+                    ? { ...u, departments_taught: (selectedOptions || []).map(opt => ({ id: Number(opt.value) })) }
+                    : u
+            )));
+        });
         try {
             await api.put(`/admin/professors/${currentUserForModal.id}/departments`, { department_ids: departmentIds });
             toast.success("Professor's departments updated!");
-            fetchData();
         } catch (error) {
+            // Revert on failure
+            startTransition(() => { setUsers(prevUsers); });
             toast.error("Failed to update professor's departments.");
         } finally {
             setIsDeptModalOpen(false);
@@ -256,17 +298,19 @@ function AdminPanel() {
     }
 
     return (
-        <Container fluid my="md">
+        <Container fluid my="md" className='admin-panel'>
             <Title order={2} mb="xl">Admin Panel</Title>
-            <Tabs defaultValue="courses">
-                <Tabs.List>
-                    <Tabs.Tab value="users">Users</Tabs.Tab>
-                    <Tabs.Tab value="courses">Courses</Tabs.Tab>
-                    <Tabs.Tab value="departments">Departments</Tabs.Tab>
-                    <Tabs.Tab value="sessions">Sessions</Tabs.Tab>
-                    <Tabs.Tab value="sections">Sections</Tabs.Tab>
-                    <Tabs.Tab value="logs">Activity Logs</Tabs.Tab>
-                </Tabs.List>
+            <Tabs defaultValue="courses" variant='outline'>
+                <ScrollArea scrollbarSize={4} scrollHideDelay={300}>
+                    <Tabs.List>
+                        <Tabs.Tab value="users">Users</Tabs.Tab>
+                        <Tabs.Tab value="courses">Courses</Tabs.Tab>
+                        <Tabs.Tab value="departments">Departments</Tabs.Tab>
+                        <Tabs.Tab value="sessions">Sessions</Tabs.Tab>
+                        <Tabs.Tab value="sections">Sections</Tabs.Tab>
+                        <Tabs.Tab value="logs">Activity Logs</Tabs.Tab>
+                    </Tabs.List>
+                </ScrollArea>
 
                 <Tabs.Panel value="users" pt="lg">
                    <UserManagement

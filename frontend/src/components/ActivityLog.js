@@ -42,15 +42,15 @@ function ActivityLog() {
 
     const rows = logs.map(log => (
         <Table.Tr key={log.id}>
-            <Table.Td>{log.timestamp}</Table.Td>
-            <Table.Td>{log.username}</Table.Td>
-            <Table.Td>{log.action}</Table.Td>
-            <Table.Td>{log.details}</Table.Td>
+            <Table.Td data-label="Timestamp">{log.timestamp}</Table.Td>
+            <Table.Td data-label="User">{log.username}</Table.Td>
+            <Table.Td data-label="Action">{log.action}</Table.Td>
+            <Table.Td data-label="Details">{log.details}</Table.Td>
         </Table.Tr>
     ));
 
     return (
-        <Paper withBorder shadow="md" p={30} mt="md" radius="md">
+        <Paper withBorder shadow="md" p="md" mt="md" radius="md">
             <Title order={4} mb="md">Filter Activity Logs</Title>
             <Group grow mb="md">
                 <DateInput
@@ -72,25 +72,27 @@ function ActivityLog() {
             {loading ? (
                 <Center h={200}><Loader /></Center>
             ) : (
-                <Table striped highlightOnHover withTableBorder withColumnBorders>
-                    <Table.Thead>
-                        <Table.Tr>
-                            <Table.Th>Timestamp</Table.Th>
-                            <Table.Th>User</Table.Th>
-                            <Table.Th>Action</Table.Th>
-                            <Table.Th>Details</Table.Th>
-                        </Table.Tr>
-                    </Table.Thead>
-                    <Table.Tbody>
-                        {rows.length > 0 ? rows : (
+                <Table.ScrollContainer minWidth={500}>
+                    <Table striped highlightOnHover withTableBorder verticalSpacing="sm">
+                        <Table.Thead>
                             <Table.Tr>
-                                <Table.Td colSpan={4}>
-                                    <Text c="dimmed" ta="center">No activity for the selected filters.</Text>
-                                </Table.Td>
+                                <Table.Th>Timestamp</Table.Th>
+                                <Table.Th>User</Table.Th>
+                                <Table.Th>Action</Table.Th>
+                                <Table.Th>Details</Table.Th>
                             </Table.Tr>
-                        )}
-                    </Table.Tbody>
-                </Table>
+                        </Table.Thead>
+                        <Table.Tbody>
+                            {rows.length > 0 ? rows : (
+                                <Table.Tr>
+                                    <Table.Td colSpan={4}>
+                                        <Text c="dimmed" ta="center">No activity for the selected filters.</Text>
+                                    </Table.Td>
+                                </Table.Tr>
+                            )}
+                        </Table.Tbody>
+                    </Table>
+                </Table.ScrollContainer>
             )}
         </Paper>
     );

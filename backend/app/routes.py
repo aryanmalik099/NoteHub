@@ -441,18 +441,24 @@ def get_all_users():
             'email': user.email,
             'role': user.role
         }
-        
-        if user.role == 'student' and user.section:
+
+        # Include section_id for students and moderators (null if unassigned)
+        if user.role in ['student', 'moderator']:
             user_data['section_id'] = user.section_id
-        elif user.role == 'professor':
-            user_data['departments_taught'] = [{
-                'id': dept.id,
-                'name': dept.name,
-                'short_name': dept.short_name
-            } for dept in user.departments_taught]
-            
+
+        # Include departments_taught details for professors
+        if user.role == 'professor':
+            user_data['departments_taught'] = [
+                {
+                    'id': dept.id,
+                    'name': dept.name,
+                    'short_name': dept.short_name,
+                }
+                for dept in user.departments_taught
+            ]
+
         users_list.append(user_data)
-        
+
     return jsonify(users_list)
 
 @api.route('/admin/users/<int:user_id>/role', methods=['PUT'])
@@ -832,23 +838,21 @@ def delete_section(section_id):
 @super_admin_required()
 def assign_student_section(user_id):
     user = User.query.get_or_404(user_id)
-    if user.role != 'student':
+    if user.role not in ['student', 'moderator']:
         return jsonify(error="This user is not a student."), 400
 
     data = request.get_json()
     section_id = data.get('section_id')
 
-    # Allow un-assigning a student by passing a null/empty section_id
     if section_id:
         section = Section.query.get(section_id)
         if not section:
             return jsonify(error="Section not found."), 404
         user.section_id = section_id
-        # Automatically update the user's department based on the section
         user.department_id = section.department_id
     else:
         user.section_id = None
-        user.department_id = None # Also clear the department if un-assigned
+        user.department_id = None
 
     db.session.commit()
     log_activity('student_section_assigned', f"Student '{user.username}' assigned to section ID {section_id}.")

@@ -17,9 +17,9 @@ function AcademicSessionManagement({ sessions, onAdd, onSetActive, onDelete }) {
 
     const rows = sessions.map((session) => (
         <Table.Tr key={session.id} bg={session.is_active ? 'var(--mantine-color-blue-light)' : undefined}>
-            <Table.Td>{session.id}</Table.Td>
-            <Table.Td>{session.year_name}</Table.Td>
-            <Table.Td>
+            <Table.Td data-label="ID">{session.id}</Table.Td>
+            <Table.Td data-label="Session Name">{session.year_name}</Table.Td>
+            <Table.Td data-label="Status">
                 {session.is_active ? (
                     <Badge color="green">Active</Badge>
                 ) : (
@@ -38,7 +38,7 @@ function AcademicSessionManagement({ sessions, onAdd, onSetActive, onDelete }) {
 
     return (
         <div>
-            <Paper withBorder shadow="md" p={30} mt="md" radius="md">
+            <Paper withBorder shadow="md" p="md" mt="md" radius="md">
                 <Title order={4} mb="md">Add New Academic Session</Title>
                 <form onSubmit={handleAddSessionSubmit}>
                     <Group grow align="flex-end">
@@ -59,19 +59,21 @@ function AcademicSessionManagement({ sessions, onAdd, onSetActive, onDelete }) {
                 </form>
             </Paper>
 
-            <Paper withBorder shadow="md" p={30} mt="xl" radius="md">
+            <Paper withBorder shadow="md" p="md" mt="xl" radius="md">
                 <Title order={4} mb="md">Existing Academic Sessions</Title>
-                <Table striped highlightOnHover withTableBorder>
-                    <Table.Thead>
-                        <Table.Tr>
-                            <Table.Th>ID</Table.Th>
-                            <Table.Th>Session Name</Table.Th>
-                            <Table.Th>Status</Table.Th>
-                            <Table.Th>Actions</Table.Th>
-                        </Table.Tr>
-                    </Table.Thead>
-                    <Table.Tbody>{rows}</Table.Tbody>
-                </Table>
+                <Table.ScrollContainer minWidth={500}>
+                    <Table striped highlightOnHover withTableBorder verticalSpacing="sm">
+                        <Table.Thead>
+                            <Table.Tr>
+                                <Table.Th>ID</Table.Th>
+                                <Table.Th>Session Name</Table.Th>
+                                <Table.Th>Status</Table.Th>
+                                <Table.Th>Actions</Table.Th>
+                            </Table.Tr>
+                        </Table.Thead>
+                        <Table.Tbody>{rows}</Table.Tbody>
+                    </Table>
+                </Table.ScrollContainer>
             </Paper>
         </div>
     );

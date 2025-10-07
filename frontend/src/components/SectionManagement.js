@@ -34,12 +34,12 @@ function SectionManagement({ sections, departments, sessions, onAdd, onEdit, onD
 
     const rows = sections.map((sec) => (
         <Table.Tr key={sec.id}>
-            <Table.Td>{sec.section_code}</Table.Td>
-            <Table.Td>{sec.department_name}</Table.Td>
-            <Table.Td>{sec.year}</Table.Td>
-            <Table.Td>{sec.name}</Table.Td>
-            <Table.Td>{sec.session_name}</Table.Td>
-            <Table.Td>
+            <Table.Td data-label="Section Code">{sec.section_code}</Table.Td>
+            <Table.Td data-label="Department">{sec.department_name}</Table.Td>
+            <Table.Td data-label="Year">{sec.year}</Table.Td>
+            <Table.Td data-label="Section">{sec.name}</Table.Td>
+            <Table.Td data-label="Session">{sec.session_name}</Table.Td>
+            <Table.Td data-label="Actions">
                 <Group gap="xs">
                     <Button variant="outline" size="xs" onClick={() => onEdit(sec)}>Edit</Button>
                     <Button variant="outline" color="red" size="xs" onClick={() => onDelete(sec.id)}>Delete</Button>
@@ -50,7 +50,7 @@ function SectionManagement({ sections, departments, sessions, onAdd, onEdit, onD
 
     return (
         <div>
-            <Paper withBorder shadow="md" p={30} mt="md" radius="md">
+            <Paper withBorder shadow="md" p="md" mt="md" radius="md">
                 <Title order={4} mb="md">Add New Section</Title>
                 <form onSubmit={handleAddSectionSubmit}>
                     <Grid>
@@ -100,21 +100,23 @@ function SectionManagement({ sections, departments, sessions, onAdd, onEdit, onD
                 </form>
             </Paper>
 
-            <Paper withBorder shadow="md" p={30} mt="xl" radius="md">
+            <Paper withBorder shadow="md" p="md" mt="xl" radius="md">
                 <Title order={4} mb="md">Existing Sections</Title>
-                <Table striped highlightOnHover withTableBorder withColumnBorders>
-                    <Table.Thead>
-                        <Table.Tr>
-                            <Table.Th>Section Code</Table.Th>
-                            <Table.Th>Department</Table.Th>
-                            <Table.Th>Year</Table.Th>
-                            <Table.Th>Section</Table.Th>
-                            <Table.Th>Session</Table.Th>
-                            <Table.Th>Actions</Table.Th>
-                        </Table.Tr>
-                    </Table.Thead>
-                    <Table.Tbody>{rows}</Table.Tbody>
-                </Table>
+                <Table.ScrollContainer minWidth={500}>
+                    <Table striped highlightOnHover withTableBorder verticalSpacing="sm">
+                        <Table.Thead>
+                            <Table.Tr>
+                                <Table.Th>Section Code</Table.Th>
+                                <Table.Th>Department</Table.Th>
+                                <Table.Th>Year</Table.Th>
+                                <Table.Th>Section</Table.Th>
+                                <Table.Th>Session</Table.Th>
+                                <Table.Th>Actions</Table.Th>
+                            </Table.Tr>
+                        </Table.Thead>
+                        <Table.Tbody>{rows}</Table.Tbody>
+                    </Table>
+                </Table.ScrollContainer>
             </Paper>
         </div>
     );

@@ -13,7 +13,7 @@ import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import './App.css';
 
-import { MantineProvider, AppShell, Burger, Group, Button, Image } from '@mantine/core';
+import { MantineProvider, AppShell, Burger, Group, Button, Image, Drawer, Stack } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 
 const ProtectedRoute = ({ isLoggedIn, children }) => {
@@ -23,7 +23,7 @@ const ProtectedRoute = ({ isLoggedIn, children }) => {
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [opened, { toggle }] = useDisclosure();
+  const [opened, { toggle, close }] = useDisclosure();
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -41,7 +41,6 @@ function App() {
         <ToastContainer position="top-right" autoClose={5000} theme="light" />
         <AppShell
           header={{ height: 60 }}
-          navbar={{ width: 300, breakpoint: 'sm', collapsed: { desktop: true, mobile: !opened } }}
           padding="md"
         >
           <AppShell.Header>
@@ -59,7 +58,7 @@ function App() {
                     {localStorage.getItem('userRole') === 'super_admin' && <Button component={RouterLink} to="/admin" variant="subtle">Admin Panel</Button>}
                     <Button component={RouterLink} to="/upload" variant="subtle">Upload Note</Button>
                     <Button component={RouterLink} to="/profile" variant="subtle">Profile</Button>
-                    <Button variant="subtle" onClick={handleLogout} component={RouterLink} to="/login">Logout</Button>
+                    <Button variant="filled" color="red" onClick={handleLogout} component={RouterLink} to="/login">Logout</Button>
                   </>
                 ) : (
                   <>
@@ -70,23 +69,6 @@ function App() {
               </Group>
             </Group>
           </AppShell.Header>
-
-          <AppShell.Navbar py="md" px={4}>
-            <Button component={RouterLink} to="/" variant="subtle" onClick={toggle}>Home</Button>
-            {isLoggedIn ? (
-              <>
-                {localStorage.getItem('userRole') === 'super_admin' && <Button component={RouterLink} to="/admin" variant="subtle" onClick={toggle}>Admin Panel</Button>}
-                <Button component={RouterLink} to="/upload" variant="subtle" onClick={toggle}>Upload Note</Button>
-                <Button component={RouterLink} to="/profile" variant="subtle" onClick={toggle}>Profile</Button>
-                <Button variant="subtle" onClick={() => { handleLogout(); toggle(); }} component={RouterLink} to="/login">Logout</Button>
-              </>
-            ) : (
-              <>
-                <Button component={RouterLink} to="/login" variant="subtle" onClick={toggle}>Login</Button>
-                <Button component={RouterLink} to="/signup" onClick={toggle}>Sign Up</Button>
-              </>
-            )}
-          </AppShell.Navbar>
 
           <AppShell.Main>
             <Routes>
@@ -101,6 +83,24 @@ function App() {
             </Routes>
           </AppShell.Main>
         </AppShell>
+        <Drawer opened={opened} onClose={close} title="" hiddenFrom="sm" size="50%">
+            <Stack>
+                <Button component={RouterLink} to="/" variant="subtle" onClick={close}>Home</Button>
+                {isLoggedIn ? (
+                  <>
+                    {localStorage.getItem('userRole') === 'super_admin' && <Button component={RouterLink} to="/admin" variant="subtle" onClick={close}>Admin Panel</Button>}
+                    <Button component={RouterLink} to="/upload" variant="subtle" onClick={close}>Upload Note</Button>
+                    <Button component={RouterLink} to="/profile" variant="subtle" onClick={close}>Profile</Button>
+                    <Button variant="filled" color="red" onClick={handleLogout} component={RouterLink} to="/login">Logout</Button>
+                  </>
+                ) : (
+                  <>
+                    <Button component={RouterLink} to="/login" variant="subtle" onClick={close}>Login</Button>
+                    <Button component={RouterLink} to="/signup" onClick={close}>Sign Up</Button>
+                  </>
+                )}
+            </Stack>
+        </Drawer>
       </Router>
     </MantineProvider>
   );

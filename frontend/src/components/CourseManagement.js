@@ -24,11 +24,11 @@ function CourseManagement({ courses, onAdd, onEdit, onDelete }) {
 
     const rows = courses.map((course) => (
         <Table.Tr key={course.id}>
-            <Table.Td>{course.id}</Table.Td>
-            <Table.Td>{course.name}</Table.Td>
-            <Table.Td>{course.short_name}</Table.Td>
-            <Table.Td>{course.duration_years} years</Table.Td>
-            <Table.Td>
+            <Table.Td data-label="ID">{course.id}</Table.Td>
+            <Table.Td data-label="Name">{course.name}</Table.Td>
+            <Table.Td data-label="Short Name">{course.short_name}</Table.Td>
+            <Table.Td data-label="Duration">{course.duration_years} years</Table.Td>
+            <Table.Td data-label="Actions">
                 <Group gap="xs">
                     <Button variant="outline" size="xs" onClick={() => onEdit(course)}>Edit</Button>
                     <Button variant="outline" color="red" size="xs" onClick={() => onDelete(course.id)}>Delete</Button>
@@ -39,7 +39,7 @@ function CourseManagement({ courses, onAdd, onEdit, onDelete }) {
 
     return (
         <div>
-            <Paper withBorder shadow="md" p={30} mt="md" radius="md">
+            <Paper withBorder shadow="md" p="md" mt="md" radius="md">
                 <Title order={4} mb="md">Add New Course</Title>
                 <form onSubmit={handleAddCourse}>
                     <Group grow>
@@ -70,19 +70,23 @@ function CourseManagement({ courses, onAdd, onEdit, onDelete }) {
                 </form>
             </Paper>
 
-            <Paper withBorder shadow="md" p={30} mt="xl" radius="md">
-                <Table striped highlightOnHover withTableBorder>
-                    <Table.Thead>
-                        <Table.Tr>
-                            <Table.Th>ID</Table.Th>
-                            <Table.Th>Name</Table.Th>
-                            <Table.Th>Short Name</Table.Th>
-                            <Table.Th>Duration</Table.Th>
-                            <Table.Th>Actions</Table.Th>
-                        </Table.Tr>
-                    </Table.Thead>
-                    <Table.Tbody>{rows}</Table.Tbody>
-                </Table>
+            <Paper withBorder shadow="md" p="md" mt="xl" radius="md">
+                <Title order={4} mb="md">Existing Courses</Title>
+                <Table.ScrollContainer minWidth={500}>
+                    <Table striped highlightOnHover withTableBorder verticalSpacing="sm">
+                        <Table.Thead>
+                            <Table.Tr>
+                                <Table.Th>ID</Table.Th>
+                                <Table.Th>Name</Table.Th>
+                                <Table.Th>Short Name</Table.Th>
+                                <Table.Th>Duration</Table.Th>
+                                <Table.Th>Actions</Table.Th>
+                            </Table.Tr>
+                        </Table.Thead>
+                        <Table.Tbody>{rows}</Table.Tbody>
+                    </Table>
+                </Table.ScrollContainer>
+                
             </Paper>
         </div>
     );
