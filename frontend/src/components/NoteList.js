@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import api from '../api';
+import { toast } from 'react-toastify';
 import { Card, Grid, TextInput, Switch, Button, Text, Badge, Group, Paper, Loader, Center, Pagination } from '@mantine/core';
 
 function NoteList() {
@@ -15,6 +16,8 @@ function NoteList() {
         verified: false
     });
 
+    const userRole = localStorage.getItem('userRole');
+
     const fetchNotes = useCallback(async (searchParams, page) => {
         setLoading(true);
         setError('');
@@ -23,7 +26,6 @@ function NoteList() {
             if (searchParams.title) params.title = searchParams.title;
             if (searchParams.subject) params.subject = searchParams.subject;
             if (searchParams.academic_year) params.academic_year = searchParams.academic_year;
-            // The backend expects the string 'true' for this filter
             if (searchParams.verified) params.verified = 'true';
 
             const response = await api.get('/notes', { params });
@@ -56,17 +58,25 @@ function NoteList() {
         }
     };
     
-    // --- THIS IS THE FINAL FIX ---
-    // This single handler is now robust enough for all inputs.
-    // It reads the name, value, type, and checked status from the event *immediately*.
     const handleFilterChange = (event) => {
         const { name, value, type, checked } = event.currentTarget;
         
-        // Use the stored value (not the event object) to update the state.
         setFilters(currentFilters => ({
             ...currentFilters,
             [name]: type === 'checkbox' ? checked : value
         }));
+    };
+
+    const handleDelete = async (noteId) => {
+        if (window.confirm('Are you sure you want to delete this note?')) {
+            try {
+                await api.delete(`/notes/${noteId}`);
+                toast.success('Note deleted successfully!');
+                fetchNotes(filters, currentPage);
+            } catch (err) {
+                toast.error(err.response?.data?.error || 'Failed to delete note.');
+            }
+        }
     };
 
     if (error) {
@@ -151,6 +161,23 @@ function NoteList() {
                                         >
                                             Download Note
                                         </Button>
+
+                                        {['professor', 'moderator', 'super_admin'].includes(userRole) && (
+                                            <Button
+                                                variant="light"
+                                                color="red"
+                                                fullWidth
+                                                mt="md"
+                                                radius="md"
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    e.stopPropagation();
+                                                    handleDelete(note.id);
+                                                }}
+                                            >
+                                                Delete
+                                            </Button>
+                                        )}
                                     </Card>
                                 </Grid.Col>
                             ))

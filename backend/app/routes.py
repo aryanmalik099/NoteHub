@@ -356,7 +356,7 @@ def delete_note(note_id):
 
     # 2. New Permission Check:
     # Allow deletion if the user is the author OR if the user is a moderator
-    if note.user_id != current_user.id and current_user.role not in ['moderator', 'super_admin']:
+    if note.user_id != current_user.id and current_user.role not in ["professor" ,'moderator', 'super_admin']:
         return jsonify({"error": "Forbidden: You do not have permission to delete this note"}), 403
 
     # The rest of the delete logic remains the same
