@@ -49,7 +49,6 @@ class Section(db.Model):
     
     academic_session_id = db.Column(db.Integer, db.ForeignKey('academic_sessions.id'), nullable=False)
 
-    # A section's unique code, e.g., "3CSE2"
     @property
     def section_code(self):
         return f"{self.year}{self.department.short_name}{self.name}"
@@ -95,10 +94,12 @@ class Note(db.Model):
     
     # Mark if a note is verified by a professor
     is_verified = db.Column(db.Boolean, default=False, nullable=False)
-
+    
+    section_id = db.Column(db.Integer, db.ForeignKey('sections.id'), nullable=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     department_id = db.Column(db.Integer, db.ForeignKey('departments.id'), nullable=True)
     department = db.relationship('Department', backref='notes', lazy=True)
+    section = db.relationship('Section', backref='notes', lazy=True)
 
     def __repr__(self):
         return f'<Note {self.title}>'
