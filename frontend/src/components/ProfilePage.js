@@ -2,23 +2,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import api from '../api';
 import { toast } from 'react-toastify';
 import {
-    Container,
-    Paper,
-    Title,
-    Text,
-    Tabs,
-    Grid,
-    Card,
-    Button,
-    Group,
-    Badge,
-    Modal,
-    TextInput,
-    PasswordInput,
-    Center,
-    Loader
+    Container, Paper, Title, Text, Tabs, Grid, Card, Button, Group, Badge, Modal, TextInput, Center, Loader, PasswordInput
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
+import { Link as RouterLink } from 'react-router-dom';
 
 function ProfilePage() {
     const [userData, setUserData] = useState(null);
@@ -26,11 +13,9 @@ function ProfilePage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
 
-    // State for the edit modal, preserved from original logic
     const [editingNote, setEditingNote] = useState(null);
     const [opened, { open, close }] = useDisclosure(false);
 
-    // State for the password change form, preserved from original logic
     const [passwordData, setPasswordData] = useState({
         current_password: '',
         new_password: '',
@@ -62,7 +47,7 @@ function ProfilePage() {
             try {
                 await api.delete(`/notes/${noteId}`);
                 toast.success('Note deleted successfully!');
-                fetchProfileData(); // Re-fetch data to update the list
+                fetchProfileData();
             } catch (err) {
                 toast.error('Failed to delete note.');
             }
@@ -83,7 +68,7 @@ function ProfilePage() {
             toast.success('Note updated successfully!');
             close();
             setEditingNote(null);
-            fetchProfileData(); // Re-fetch data
+            fetchProfileData();
         } catch (err) {
             toast.error('Failed to update note.');
         }
@@ -94,7 +79,7 @@ function ProfilePage() {
         try {
             await api.post('/profile/change-password', passwordData);
             toast.success('Password changed successfully!');
-            setPasswordData({ current_password: '', new_password: '' }); // Clear form
+            setPasswordData({ current_password: '', new_password: '' });
         } catch (err) {
             toast.error(err.response?.data?.error || 'Failed to change password.');
         }
@@ -117,6 +102,7 @@ function ProfilePage() {
                     <>
                         <Text mt="sm"><strong>Username:</strong> {userData.username}</Text>
                         <Text><strong>Email:</strong> {userData.email}</Text>
+                        <Text><strong>Role:</strong> {userData.role}</Text>
                     </>
                 )}
             </Paper>
@@ -133,16 +119,29 @@ function ProfilePage() {
                             myNotes.map(note => (
                                 <Grid.Col key={note.id} span={{ base: 12, md: 6, lg: 4 }}>
                                     <Card shadow="sm" padding="lg" radius="md" withBorder>
-                                        <Group justify="space-between" mt="md" mb="xs">
-                                            <Text fw={500}>{note.title}</Text>
-                                            {note.is_verified && <Badge color="green">Verified</Badge>}
-                                        </Group>
-                                        <Text size="sm" c="dimmed">Subject: {note.subject}</Text>
-                                        <Text size="sm" c="dimmed">Semester: {note.semester}</Text>
-                                        <Text size="sm" c="dimmed">Year: {note.academic_year}</Text>
-                                        <Group mt="md">
-                                            <Button variant="light" color="blue" onClick={() => handleEditClick(note)}>Edit</Button>
-                                            <Button variant="light" color="red" onClick={() => handleDelete(note.id)}>Delete</Button>
+                                        <Card.Section component={RouterLink} to={`/notes/${note.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                                            <Group justify="space-between" mt="md" px="md">
+                                                <Text fw={500}>{note.title}</Text>
+                                                {note.is_verified && <Badge color="green">Verified</Badge>}
+                                            </Group>
+                                            <Text size="sm" c="dimmed" px="md">Subject: {note.subject}</Text>
+                                            <Text size="sm" c="dimmed" px="md">Semester: {note.semester}</Text>
+                                            <Text size="sm" c="dimmed" px="md">Year: {note.academic_year}</Text>
+                                        </Card.Section>
+                                        <Group mt="md" grow>
+                                            <Button
+                                                component="a"
+                                                href={note.file_url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                variant="light"
+                                                color="blue"
+                                                size="xs"
+                                            >
+                                                Download
+                                            </Button>
+                                            <Button variant="light" size="xs" onClick={() => handleEditClick(note)}>Edit</Button>
+                                            <Button variant="light" color="red" size="xs" onClick={() => handleDelete(note.id)}>Delete</Button>
                                         </Group>
                                     </Card>
                                 </Grid.Col>
@@ -177,7 +176,6 @@ function ProfilePage() {
                 </Tabs.Panel>
             </Tabs>
 
-            {/* Edit Note Modal - Logic and state preserved from original component */}
             <Modal opened={opened} onClose={close} title="Edit Note">
                 {editingNote && (
                     <form onSubmit={handleUpdateNote}>

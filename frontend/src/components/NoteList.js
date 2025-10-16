@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { Link as RouterLink } from 'react-router-dom';
 import api from '../api';
 import { toast } from 'react-toastify';
-import { Card, Grid, TextInput, Switch, Button, Text, Badge, Group, Paper, Loader, Center, Pagination } from '@mantine/core';
+import { Card, Grid, TextInput, Switch, Button, Text, Badge, Group, Paper, Loader, Center, Pagination, Modal } from '@mantine/core';
+import { useDisclosure } from '@mantine/hooks';
 
 function NoteList() {
     const [notes, setNotes] = useState([]);
@@ -15,8 +17,11 @@ function NoteList() {
         academic_year: '',
         verified: false
     });
+    const [opened, { open, close }] = useDisclosure(false);
+    const [editingNote, setEditingNote] = useState(null);
 
     const userRole = localStorage.getItem('userRole');
+    const userId = localStorage.getItem('userId');
 
     const fetchNotes = useCallback(async (searchParams, page) => {
         setLoading(true);
@@ -79,6 +84,24 @@ function NoteList() {
         }
     };
 
+    const handleEditClick = (note) => {
+        setEditingNote({ ...note });
+        open();
+    };
+
+    const handleUpdateNote = async (e) => {
+        e.preventDefault();
+        if (!editingNote) return;
+        try {
+            await api.put(`/notes/${editingNote.id}`, editingNote);
+            toast.success('Note updated successfully!');
+            close();
+            fetchNotes(filters, currentPage);
+        } catch (err) {
+            toast.error('Failed to update note.');
+        }
+    };
+
     if (error) {
         return <Text c="red" ta="center" mt="xl">{error}</Text>;
     }
@@ -131,75 +154,71 @@ function NoteList() {
                 <>
                     <Grid>
                         {notes.length > 0 ? (
-                            notes.map(note => (
-                                <Grid.Col key={note.id} span={{ base: 12, md: 6, lg: 4 }}>
-                                    <Card shadow="sm" padding="lg" radius="md" withBorder>
-                                        <Group justify="space-between" mt="md" mb="xs">
-                                            <Text fw={500}>{note.title}</Text>
-                                            {note.is_verified && (
-                                                <Badge color="green" variant="light">
-                                                    Verified
-                                                </Badge>
-                                            )}
-                                        </Group>
-                                        <Text size="sm" c="dimmed">Subject: {note.subject}</Text>
-                                        <Text size="sm" c="dimmed">Semester: {note.semester}</Text>
-                                        <Text size="sm" c="dimmed">Year: {note.academic_year}</Text>
-                                        <Text size="sm" c="dimmed" mt="sm">
-                                            Uploaded by: {note.author_username}
-                                        </Text>
-                                        <Button
-                                            component="a"
-                                            href={note.file_url}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            variant="light"
-                                            color="blue"
-                                            fullWidth
-                                            mt="md"
-                                            radius="md"
-                                        >
-                                            Download Note
-                                        </Button>
+                            notes.map(note => {
+                                const isAuthor = String(note.author_id) === userId;
+                                const isPrivileged = ['moderator', 'professor', 'super_admin'].includes(userRole);
 
-                                        {['professor', 'moderator', 'super_admin'].includes(userRole) && (
-                                            <Button
-                                                variant="light"
-                                                color="red"
-                                                fullWidth
-                                                mt="md"
-                                                radius="md"
-                                                onClick={(e) => {
-                                                    e.preventDefault();
-                                                    e.stopPropagation();
-                                                    handleDelete(note.id);
-                                                }}
-                                            >
-                                                Delete
-                                            </Button>
-                                        )}
-                                    </Card>
-                                </Grid.Col>
-                            ))
+                                return (
+                                    <Grid.Col key={note.id} span={{ base: 12, md: 6, lg: 4 }}>
+                                        <Card shadow="sm" padding="lg" radius="md" withBorder>
+                                            <Card.Section component={RouterLink} to={`/notes/${note.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                                                <Group justify="space-between" mt="md" px="md">
+                                                    <Text fw={500}>{note.title}</Text>
+                                                    {note.is_verified && <Badge color="green" variant="light">Verified</Badge>}
+                                                </Group>
+                                                <Text size="sm" c="dimmed" px="md" pb="xs">Subject: {note.subject}</Text>
+                                            </Card.Section>
+
+                                            <Group mt="md" grow>
+                                                <Button
+                                                    component="a"
+                                                    href={note.file_url}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    variant="light"
+                                                    color="blue"
+                                                    size="xs"
+                                                >
+                                                    Download
+                                                </Button>
+                                                {(isAuthor || isPrivileged) && (
+                                                    <Button variant="light" size="xs" onClick={() => handleEditClick(note)}>Edit</Button>
+                                                )}
+                                                {(isAuthor || isPrivileged) && (
+                                                    <Button variant="light" color="red" size="xs" onClick={() => handleDelete(note.id)}>Delete</Button>
+                                                )}
+                                            </Group>
+                                        </Card>
+                                    </Grid.Col>
+                                )
+                            })
                         ) : (
                             <Grid.Col span={12}>
-                                <Text ta="center" c="dimmed" mt="xl">
-                                    No notes found for your search.
-                                </Text>
+                                <Text ta="center" c="dimmed" mt="xl">No notes found for your search.</Text>
                             </Grid.Col>
                         )}
                     </Grid>
                     
                     <Center mt="xl">
-                        <Pagination
-                            total={totalPages}
-                            value={currentPage}
-                            onChange={handlePageChange}
-                            disabled={totalPages === 0}
-                        />
+                        <Pagination total={totalPages} value={currentPage} onChange={handlePageChange} disabled={totalPages === 0} />
                     </Center>
                 </>
             )}
+
+            <Modal opened={opened} onClose={close} title="Edit Note">
+                {editingNote && (
+                    <form onSubmit={handleUpdateNote}>
+                        <TextInput label="Title" required value={editingNote.title} onChange={(e) => setEditingNote({ ...editingNote, title: e.currentTarget.value })} />
+                        <TextInput label="Subject" required mt="md" value={editingNote.subject} onChange={(e) => setEditingNote({ ...editingNote, subject: e.currentTarget.value })} />
+                        <TextInput label="Semester" required mt="md" value={editingNote.semester} onChange={(e) => setEditingNote({ ...editingNote, semester: e.currentTarget.value })} />
+                        <TextInput label="Academic Year" required mt="md" value={editingNote.academic_year} onChange={(e) => setEditingNote({ ...editingNote, academic_year: e.currentTarget.value })} />
+                        <Group justify="flex-end" mt="xl">
+                            <Button variant="default" onClick={close}>Cancel</Button>
+                            <Button type="submit">Save Changes</Button>
+                        </Group>
+                    </form>
+                )}
+            </Modal>
         </div>
     );
 }
