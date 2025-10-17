@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import api from '../api';
 import { toast } from 'react-toastify';
 import {
-    Container, Paper, Title, Text, Tabs, Grid, Card, Button, Group, Badge, Modal, TextInput, Center, Loader, PasswordInput
+    Container, Paper, Title, Text, Tabs, Grid, Card, Button, Group, Badge, Modal, TextInput, Center, Loader, PasswordInput, NumberInput, Select, MultiSelect
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { Link as RouterLink } from 'react-router-dom';
@@ -16,6 +16,9 @@ function ProfilePage() {
     const [editingNote, setEditingNote] = useState(null);
     const [opened, { open, close }] = useDisclosure(false);
 
+    const [profileDetails, setProfileDetails] = useState(null);
+    const userRole = localStorage.getItem('userRole');
+
     const [passwordData, setPasswordData] = useState({
         current_password: '',
         new_password: '',
@@ -24,13 +27,15 @@ function ProfilePage() {
     const fetchProfileData = useCallback(async () => {
         setLoading(true);
         try {
-            const userRes = await api.get('/profile');
+            const [userRes, notesRes, profileDetailsRes] = await Promise.all([
+                api.get('/profile'),
+                api.get('/notes/my_notes'),
+                api.get('/profile/details')
+            ]);
+            
             setUserData(userRes.data);
-
-            const notesRes = await api.get('/notes/my_notes');
-            if (Array.isArray(notesRes.data)) {
-                setMyNotes(notesRes.data);
-            }
+            setMyNotes(notesRes.data);
+            setProfileDetails(profileDetailsRes.data);
         } catch (err) {
             setError('Failed to fetch profile data.');
         } finally {
@@ -41,6 +46,13 @@ function ProfilePage() {
     useEffect(() => {
         fetchProfileData();
     }, [fetchProfileData]);
+
+    const availableSections = useMemo(() => {
+        if (!editingNote?.department_id || !profileDetails?.all_sections) return [];
+        return profileDetails.all_sections
+            .filter(s => String(s.department_id) === String(editingNote.department_id))
+            .map(s => ({ value: String(s.id), label: s.section_code }));
+    }, [editingNote, profileDetails]);
 
     const handleDelete = async (noteId) => {
         if (window.confirm('Are you sure you want to delete this note?')) {
@@ -55,7 +67,11 @@ function ProfilePage() {
     };
 
     const handleEditClick = (note) => {
-        setEditingNote(note);
+        setEditingNote({
+            ...note,
+            department_id: note.department_id ? String(note.department_id) : '',
+            section_ids: note.sections ? note.sections.map(s => String(s.id)) : []
+        });
         open();
     };
 
@@ -67,7 +83,6 @@ function ProfilePage() {
             await api.put(`/notes/${editingNote.id}`, editingNote);
             toast.success('Note updated successfully!');
             close();
-            setEditingNote(null);
             fetchProfileData();
         } catch (err) {
             toast.error('Failed to update note.');
@@ -103,6 +118,12 @@ function ProfilePage() {
                         <Text mt="sm"><strong>Username:</strong> {userData.username}</Text>
                         <Text><strong>Email:</strong> {userData.email}</Text>
                         <Text><strong>Role:</strong> {userData.role}</Text>
+                        {userData.department_name && (
+                            <Text><strong>Department:</strong> {userData.department_name}</Text>
+                        )}
+                        {userData.section_code && (
+                            <Text><strong>Section:</strong> {userData.section_code}</Text>
+                        )}
                     </>
                 )}
             </Paper>
@@ -128,7 +149,7 @@ function ProfilePage() {
                                             <Text size="sm" c="dimmed" px="md">Semester: {note.semester}</Text>
                                             <Text size="sm" c="dimmed" px="md">Year: {note.academic_year}</Text>
                                         </Card.Section>
-                                        <Group mt="md" grow>
+                                        <Group mt="md">
                                             <Button
                                                 component="a"
                                                 href={note.file_url}
@@ -192,12 +213,13 @@ function ProfilePage() {
                             value={editingNote.subject}
                             onChange={(e) => setEditingNote({ ...editingNote, subject: e.currentTarget.value })}
                         />
-                         <TextInput
+                        <NumberInput
                             label="Semester"
                             required
                             mt="md"
-                            value={editingNote.semester}
-                            onChange={(e) => setEditingNote({ ...editingNote, semester: e.currentTarget.value })}
+                            value={Number(editingNote.semester)}
+                            onChange={(value) => setEditingNote({ ...editingNote, semester: value })}
+                            min={1} max={8}
                         />
                         <TextInput
                             label="Academic Year"
@@ -206,6 +228,32 @@ function ProfilePage() {
                             value={editingNote.academic_year}
                             onChange={(e) => setEditingNote({ ...editingNote, academic_year: e.currentTarget.value })}
                         />
+                        {profileDetails && (
+                            <>
+                                {userRole === 'professor' && (
+                                    <Select mt="md" label="Department"
+                                        data={profileDetails.departments_taught.map(d => ({ value: String(d.id), label: d.name }))}
+                                        value={editingNote.department_id}
+                                        onChange={(val) => setEditingNote({...editingNote, department_id: val})}
+                                    />
+                                )}
+                                {userRole === 'super_admin' && (
+                                    <Group grow mt="md">
+                                        <Select label="Department"
+                                            data={profileDetails.all_departments.map(d => ({ value: String(d.id), label: d.name }))}
+                                            value={editingNote.department_id}
+                                            onChange={(val) => setEditingNote({...editingNote, department_id: val, section_ids: []})}
+                                        />
+                                        <MultiSelect label="Sections"
+                                            data={availableSections}
+                                            value={editingNote.section_ids}
+                                            onChange={(val) => setEditingNote({...editingNote, section_ids: val})}
+                                            disabled={!editingNote.department_id}
+                                        />
+                                    </Group>
+                                )}
+                            </>
+                        )}
                         <Group justify="flex-end" mt="xl">
                             <Button variant="default" onClick={close}>Cancel</Button>
                             <Button type="submit">Save Changes</Button>

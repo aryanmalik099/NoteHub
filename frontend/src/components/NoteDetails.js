@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link as RouterLink, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import api from '../api';
-import { Container, Paper, Title, Text, Button, Loader, Center, Badge, Group, AspectRatio, Modal, TextInput } from '@mantine/core';
+import { Container, Paper, Title, Text, Anchor, Button, Loader, Center, Badge, Group, AspectRatio, Modal, TextInput, NumberInput, Select, MultiSelect } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 
 function NoteDetails() {
@@ -15,14 +15,19 @@ function NoteDetails() {
     const [opened, { open, close }] = useDisclosure(false);
     const [editingNote, setEditingNote] = useState(null);
 
+    const [profileDetails, setProfileDetails] = useState(null);
     const currentUserId = localStorage.getItem('userId');
     const currentUserRole = localStorage.getItem('userRole');
 
     useEffect(() => {
         const fetchNote = async () => {
             try {
-                const res = await api.get(`/notes/${noteId}`);
-                setNote(res.data);
+                const [noteRes, profileRes] = await Promise.all([
+                    api.get(`/notes/${noteId}`),
+                    api.get('/profile/details')
+                ]);
+                setNote(noteRes.data);
+                setProfileDetails(profileRes.data);
             } catch (err) {
                 setError('Note not found or an error occurred.');
             } finally {
@@ -31,6 +36,13 @@ function NoteDetails() {
         };
         fetchNote();
     }, [noteId]);
+
+    const availableSections = useMemo(() => {
+        if (!editingNote?.department_id || !profileDetails?.all_sections) return [];
+        return profileDetails.all_sections
+            .filter(s => String(s.department_id) === String(editingNote.department_id))
+            .map(s => ({ value: String(s.id), label: s.section_code }));
+    }, [editingNote, profileDetails]);
 
     const handleDelete = async () => {
         if (window.confirm('Are you sure you want to delete this note?')) {
@@ -45,7 +57,11 @@ function NoteDetails() {
     };
 
     const handleEditClick = () => {
-        setEditingNote({ ...note });
+        setEditingNote({
+            ...note,
+            department_id: note.department_id ? String(note.department_id) : '',
+            section_ids: note.sections ? note.sections.map(s => String(s.id)) : []
+        });
         open();
     };
 
@@ -54,9 +70,9 @@ function NoteDetails() {
         if (!editingNote) return;
 
         try {
-            await api.put(`/notes/${editingNote.id}`, editingNote);
-            toast.success('Note updated successfully!');
-            setNote(editingNote);
+            const response = await api.put(`/notes/${editingNote.id}`, editingNote);
+            toast.success(response.data.message || 'Note updated successfully!');
+            setNote(response.data.note);
             close();
         } catch (err) {
             toast.error('Failed to update note.');
@@ -82,13 +98,17 @@ function NoteDetails() {
                         <Title order={2}>{note.title}</Title>
                         {note.is_verified && <Badge color="green" size="lg">Verified</Badge>}
                     </Group>
-                    <Text c="dimmed" mt="sm">Uploaded by: {note.author_username} on {note.created_at}</Text>
+                    <Text c="dimmed" mt="sm">
+                        Uploaded by: <Anchor component={RouterLink} to={`/users/${note.author_username}`}>{note.author_username}</Anchor> on {note.created_at}
+                    </Text>
                     
                     <Text mt="lg"><strong>Subject:</strong> {note.subject}</Text>
                     <Text><strong>Semester:</strong> {note.semester}</Text>
                     <Text><strong>Academic Year:</strong> {note.academic_year}</Text>
                     {note.department_name && <Text><strong>Department:</strong> {note.department_name}</Text>}
-                    {note.section_code && <Text><strong>Section:</strong> {note.section_code}</Text>}
+                    {note.sections && note.sections.length > 0 && (
+                        <Text><strong>Sections:</strong> {note.sections.map(s => s.code).join(', ')}</Text>
+                    )}
                     
                     <Group mt="xl">
                         <Button component="a" href={note.file_url} target="_blank" rel="noopener noreferrer">
@@ -131,12 +151,13 @@ function NoteDetails() {
                             value={editingNote.subject}
                             onChange={(e) => setEditingNote({ ...editingNote, subject: e.currentTarget.value })}
                         />
-                         <TextInput
+                        <NumberInput
                             label="Semester"
                             required
                             mt="md"
                             value={editingNote.semester}
-                            onChange={(e) => setEditingNote({ ...editingNote, semester: e.currentTarget.value })}
+                            onChange={(value) => setEditingNote({ ...editingNote, semester: value || '' })}
+                            min={1} max={8}
                         />
                         <TextInput
                             label="Academic Year"
@@ -145,6 +166,32 @@ function NoteDetails() {
                             value={editingNote.academic_year}
                             onChange={(e) => setEditingNote({ ...editingNote, academic_year: e.currentTarget.value })}
                         />
+                        {profileDetails && (
+                            <>
+                                {currentUserRole === 'professor' && (
+                                    <Select mt="md" label="Department"
+                                        data={profileDetails.departments_taught.map(d => ({ value: String(d.id), label: d.name }))}
+                                        value={editingNote.department_id}
+                                        onChange={(val) => setEditingNote({...editingNote, department_id: val})}
+                                    />
+                                )}
+                                {currentUserRole === 'super_admin' && (
+                                    <Group grow mt="md">
+                                        <Select label="Department"
+                                            data={profileDetails.all_departments.map(d => ({ value: String(d.id), label: d.name }))}
+                                            value={editingNote.department_id}
+                                            onChange={(val) => setEditingNote({...editingNote, department_id: val, section_ids: []})} // Reset sections on change
+                                        />
+                                        <MultiSelect label="Sections"
+                                            data={availableSections}
+                                            value={editingNote.section_ids}
+                                            onChange={(val) => setEditingNote({...editingNote, section_ids: val})}
+                                            disabled={!editingNote.department_id}
+                                        />
+                                    </Group>
+                                )}
+                            </>
+                        )}
                         <Group justify="flex-end" mt="xl">
                             <Button variant="default" onClick={close}>Cancel</Button>
                             <Button type="submit">Save Changes</Button>

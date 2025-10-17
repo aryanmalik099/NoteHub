@@ -1,6 +1,11 @@
 from . import db
 from datetime import datetime
 
+note_sections = db.Table('note_sections',
+    db.Column('note_id', db.Integer, db.ForeignKey('notes.id'), primary_key=True),
+    db.Column('section_id', db.Integer, db.ForeignKey('sections.id'), primary_key=True)
+)
+
 professor_departments = db.Table('professor_departments',
     db.Column('user_id', db.Integer, db.ForeignKey('users.id'), primary_key=True),
     db.Column('department_id', db.Integer, db.ForeignKey('departments.id'), primary_key=True)
@@ -90,16 +95,13 @@ class Note(db.Model):
     subject = db.Column(db.String(100), nullable=False)
     semester = db.Column(db.Integer, nullable=False)
     academic_year = db.Column(db.String(100), nullable=False)
-    section = db.Column(db.String(20), nullable=True) # e.g., 1, 2, A, B
     
-    # Mark if a note is verified by a professor
     is_verified = db.Column(db.Boolean, default=False, nullable=False)
     
-    section_id = db.Column(db.Integer, db.ForeignKey('sections.id'), nullable=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     department_id = db.Column(db.Integer, db.ForeignKey('departments.id'), nullable=True)
     department = db.relationship('Department', backref='notes', lazy=True)
-    section = db.relationship('Section', backref='notes', lazy=True)
+    sections = db.relationship('Section', secondary=note_sections, backref=db.backref('notes', lazy='dynamic'))
 
     def __repr__(self):
         return f'<Note {self.title}>'

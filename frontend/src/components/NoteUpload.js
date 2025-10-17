@@ -1,7 +1,7 @@
-import React, { useState, useEffect} from 'react';
+import React, { useState, useEffect, useMemo} from 'react';
 import { toast } from 'react-toastify';
 import api from '../api';
-import { Container, Paper, Title, TextInput, NumberInput, Button, FileInput, Select, Loader, Center } from '@mantine/core';
+import { Container, Paper, Title, TextInput, NumberInput, Button, FileInput, Select, Loader, Center, Group, MultiSelect } from '@mantine/core';
 
 function NoteUpload() {
     const [noteData, setNoteData] = useState({
@@ -10,31 +10,20 @@ function NoteUpload() {
         semester: '',
         academic_year: ''
     });
-    const [files, setFiles] = useState(null);
+    const [files, setFiles] = useState([]);
     const [isUploading, setIsUploading] = useState(false);
 
     const [profileDetails, setProfileDetails] = useState(null);
     const [loading, setLoading] = useState(true);
 
-    const [selectedSection, setSelectedSection] = useState('');
+    const [selectedSections, setSelectedSections] = useState([]);
     const [selectedDepartment, setSelectedDepartment] = useState('');
-
-    const handleInputChange = (e) => {
-        setNoteData({ ...noteData, [e.target.name]: e.target.value });
-    };
-
-    const handleSemesterChange = (value) => {
-        setNoteData({ ...noteData, semester: value || '' });
-    };
 
     useEffect(() => {
         const fetchProfileDetails = async () => {
             try {
                 const res = await api.get('/profile/details');
                 setProfileDetails(res.data);
-                if (res.data.role === 'student' || res.data.role === 'moderator') {
-                    setSelectedSection(String(res.data.section?.id || ''));
-                }
             } catch (error) {
                 toast.error("Could not load user details for form.");
             } finally {
@@ -43,6 +32,28 @@ function NoteUpload() {
         };
         fetchProfileDetails();
     }, []);
+
+    const availableSections = useMemo(() => {
+        if (!selectedDepartment || !profileDetails?.all_sections) {
+            return [];
+        }
+        return profileDetails.all_sections
+            .filter(section => String(section.department_id) === selectedDepartment)
+            .map(section => ({ value: String(section.id), label: section.section_code }));
+    }, [selectedDepartment, profileDetails]);
+    
+    const handleDepartmentChange = (value) => {
+        setSelectedDepartment(value);
+        setSelectedSections([]);
+    };
+
+    const handleInputChange = (e) => {
+        setNoteData({ ...noteData, [e.target.name]: e.target.value });
+    };
+
+    const handleSemesterChange = (value) => {
+        setNoteData({ ...noteData, semester: value || '' });
+    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -64,8 +75,11 @@ function NoteUpload() {
 
         if (profileDetails.role === 'professor' && selectedDepartment) {
             formData.append('department_id', selectedDepartment);
-        } else if (selectedSection) {
-            formData.append('section_id', selectedSection);
+        } else if (profileDetails.role === 'super_admin') {
+            if (selectedDepartment) formData.append('department_id', selectedDepartment);
+            selectedSections.forEach(sectionId => {
+                formData.append('section_ids', sectionId);
+            });
         }
 
         try {
@@ -76,7 +90,9 @@ function NoteUpload() {
             });
             toast.success('Note uploaded successfully!');
             setNoteData({ title: '', subject: '', semester: '', academic_year: '' });
-            setFiles(null);
+            setFiles([]);
+            setSelectedDepartment('');
+            setSelectedSections([]);
         } catch (error) {
             toast.error(error.response?.data?.error || 'An error occurred during upload.');
         } finally {
@@ -87,6 +103,7 @@ function NoteUpload() {
     if (loading) {
         return <Center style={{ height: 300 }}><Loader /></Center>;
     }
+
 
     return (
         <Container size={560} my={40}>
@@ -137,26 +154,43 @@ function NoteUpload() {
                         onChange={handleInputChange}
                         disabled={isUploading}
                     />
-                    {(profileDetails?.role === 'student' || profileDetails?.role === 'moderator') && profileDetails?.section && (
-                         <Select
-                            mt="md"
-                            label="Section"
-                            data={[{ value: String(profileDetails.section.id), label: profileDetails.section.section_code }]}
-                            value={selectedSection}
-                            onChange={setSelectedSection}
-                            disabled
-                         />
-                    )}
                     {profileDetails?.role === 'professor' && (
                         <Select
-                            mt="md"
-                            label="Department"
-                            placeholder="Tag a department for this note"
-                            data={profileDetails.departments_taught.map(d => ({ value: String(d.id), label: d.name }))}
-                            value={selectedDepartment}
-                            onChange={setSelectedDepartment}
-                            clearable
+                            mt="md" label="Department" placeholder="Tag a department"
+                            data={(profileDetails.departments_taught || []).map(d => ({ value: String(d.id), label: d.name }))}
+                            value={selectedDepartment} onChange={setSelectedDepartment} clearable
                         />
+                    )}
+
+                    {profileDetails && (
+                        <>
+                            {profileDetails.role === 'professor' && (
+                                <Select
+                                    mt="md" label="Department" placeholder="Tag a department for this note"
+                                    data={(profileDetails.departments_taught || []).map(d => ({ value: String(d.id), label: d.name }))}
+                                    value={selectedDepartment} onChange={setSelectedDepartment} clearable
+                                />
+                            )}
+                            {profileDetails.role === 'super_admin' && (
+                                <Group grow mt="md">
+                                    <Select
+                                        label="Assign to Department" placeholder="Choose a department"
+                                        data={(profileDetails.all_departments || []).map(d => ({ value: String(d.id), label: d.name }))}
+                                        value={selectedDepartment}
+                                        onChange={handleDepartmentChange}
+                                        clearable searchable
+                                    />
+                                    <MultiSelect
+                                        label="Assign to Section(s) (Optional)" placeholder="Select sections"
+                                        data={availableSections}
+                                        value={selectedSections}
+                                        onChange={setSelectedSections}
+                                        disabled={!selectedDepartment}
+                                        clearable
+                                    />
+                                </Group>
+                            )}
+                        </>
                     )}
                     <FileInput
                         label="Note File(s)"

@@ -9,6 +9,7 @@ import AdminPanel from './components/AdminPanel';
 import NoteUpload from './components/NoteUpload';
 import NoteList from './components/NoteList';
 import NoteDetails from './components/NoteDetails';
+import PublicProfile from './components/PublicProfile';
 import logo from './logo.png';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -75,6 +76,7 @@ function App() {
             <Routes>
               <Route path="/" element={<NoteList />} />
               <Route path="/notes/:noteId" element={<NoteDetails />} />
+              <Route path="/users/:username" element={<PublicProfile />} />
               <Route path="/login" element={isLoggedIn ? <Navigate to="/" /> : <Login setIsLoggedIn={setIsLoggedIn} />} />
               <Route path="/signup" element={isLoggedIn ? <Navigate to="/" /> : <Signup />} />
               <Route path="/forgot-password" element={<ForgotPassword />} />

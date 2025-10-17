@@ -156,7 +156,9 @@ def get_profile_details():
     user_data = {
         'role': user.role,
         'section': None,
-        'departments_taught': []
+        'departments_taught': [],
+        'all_departments': [],
+        'all_sections': []
     }
 
     if user.role in ['student', 'moderator'] and user.section:
@@ -164,12 +166,21 @@ def get_profile_details():
             'id': user.section.id,
             'section_code': user.section.section_code
         }
-    
+
     if user.role == 'professor':
-        user_data['departments_taught'] = [{
-            'id': dept.id,
-            'name': dept.name
-        } for dept in user.departments_taught]
+        user_data['departments_taught'] = [
+            {
+                'id': dept.id,
+                'name': dept.name
+            } for dept in user.departments_taught
+        ]
+
+    if user.role == 'super_admin':
+        all_depts = Department.query.order_by(Department.name).all()
+        user_data['all_departments'] = [{'id': d.id, 'name': d.name} for d in all_depts]
+        
+        all_sects = Section.query.options(joinedload(Section.department)).order_by(Section.name).all()
+        user_data['all_sections'] = [{'id': s.id, 'section_code': s.section_code, 'department_id': s.department_id} for s in all_sects]
 
     return jsonify(user_data)
 
@@ -227,31 +238,45 @@ def refresh():
 def upload_note(): 
     try:
         current_user_id = int(get_jwt_identity())
-        claims = get_jwt()
-        user_role = claims.get('role')
+        user = User.query.get(current_user_id)
+        if not user:
+            return jsonify({"error": "User not found in database"}), 401
+        user_role = user.role
     except (TypeError, ValueError):
         return jsonify({"error": "Invalid user identity in token"}), 401
 
-    files = request.files.getlist('file')
+    # --- 1. VALIDATE FORM DATA FIRST ---
+    title = request.form.get('title')
+    subject = request.form.get('subject')
+    semester_str = request.form.get('semester')
+    academic_year = request.form.get('academic_year')
 
-    if not files:
-        return jsonify({"error": "No file part"}), 400
+    # This validation is now correct, checking only the core fields
+    if not all([title, subject, semester_str, academic_year]):
+        return jsonify({"error": "Missing required form fields. Please fill out all entries."}), 400
+
+    try:
+        semester = int(semester_str)
+    except (ValueError, TypeError):
+        return jsonify({"error": "Semester must be a valid number."}), 400
+
+    # --- 2. VALIDATE FILES (if form data is ok) ---
+    files = request.files.getlist('file')
+    if not files or files[0].filename == '':
+        return jsonify({"error": "No file selected"}), 400
     
+    # --- 3. PROCESS AND UPLOAD FILES ---
     final_file_to_upload = None
     original_filename = files[0].filename
     content_type = files[0].content_type
     
     if len(files) == 1 and files[0].mimetype == 'application/pdf':
-        # If it's a single PDF, use it directly
         final_file_to_upload = files[0]
     elif all(file.mimetype.startswith('image/') for file in files):
-        # If there are one or more images, convert them
         pdf_stream = convert_images_to_pdf(files)
         if not pdf_stream:
             return jsonify({"error": "Failed to convert images to PDF."}), 500
-        
         final_file_to_upload = pdf_stream
-        # We create a new filename for the combined PDF
         original_filename = f"{original_filename.rsplit('.', 1)[0]}.pdf"
         content_type = 'application/pdf'
     else:
@@ -264,46 +289,39 @@ def upload_note():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-    title = request.form.get('title')
-    subject = request.form.get('subject')
-    semester_str = request.form.get('semester')
-    academic_year = request.form.get('academic_year')
-    section_id = request.form.get('section_id')
-    department_id = request.form.get('department_id')
-
-    if not all([title, subject, semester_str, academic_year, section_id, department_id]):
-        return jsonify({"error": "Missing required form fields"}), 400
-
-    try:
-        semester = int(semester_str)
-    except ValueError:
-        return jsonify({"error": "semester must be integers"}), 400
-    
-    title = request.form.get('title')
-    subject = request.form.get('subject')
-    semester_str = request.form.get('semester')
-    academic_year = request.form.get('academic_year')
-    section_id = request.form.get('section_id')
-    department_id = request.form.get('department_id')
-
     new_note = Note(
-        title=request.form.get('title'),
+        title=title,
         file_url=file_url,
-        subject=request.form.get('subject'),
-        semester=int(request.form.get('semester')),
-        academic_year=request.form.get('academic_year'),
+        subject=subject,
+        semester=semester,
+        academic_year=academic_year,
         user_id=current_user_id,
         is_verified=(user_role == 'professor')
     )
 
-    if user_role in ['student', 'moderator'] and section_id:
-        new_note.section_id = int(section_id)
+    department_id = request.form.get('department_id')
+    section_ids = request.form.getlist('section_ids')
 
-    if user_role == 'professor' and department_id:
-        new_note.department_id = int(department_id)
+    if user_role in ['student', 'moderator']:
+        if user.section:
+            new_note.sections.append(user.section)
+        new_note.department_id = user.department_id
+
+    elif user_role == 'professor':
+        if department_id:
+            new_note.department_id = int(department_id)
+
+    elif user_role == 'super_admin':
+        if department_id:
+            new_note.department_id = int(department_id)
+        if section_ids:
+            sections_to_add = Section.query.filter(Section.id.in_(section_ids)).all()
+            for sec in sections_to_add:
+                new_note.sections.append(sec)
 
     db.session.add(new_note)
     db.session.commit()
+    
     log_activity('note_upload', f"Note '{new_note.title}' uploaded by user ID {current_user_id}.")
     return jsonify({"message": "Note uploaded successfully!", "file_url": file_url}), 201
 
@@ -350,7 +368,7 @@ def get_notes():
             'academic_year': note.academic_year,
             'created_at': note.created_at.strftime('%Y-%m-%d %H:%M:%S'),
             'author_username': author_username,
-            'user_id': note.user_id,
+            'author_id': note.user_id,
             'is_verified': note.is_verified
         }
         notes_list.append(note_data)
@@ -366,14 +384,19 @@ def get_notes():
 @jwt_required()
 def get_profile():
     current_user_id = get_jwt_identity()
-    user = User.query.get(current_user_id)
+    user = User.query.options(
+        joinedload(User.department),
+        joinedload(User.section)
+    ).get(current_user_id)
     if not user:
         return jsonify({"error": "User not found"}), 404
         
     user_data = {
         'username': user.username,
         'email': user.email,
-        'role': user.role
+        'role': user.role,
+        'department_name': user.department.name if user.department else None,
+        'section_code': user.section.section_code if user.section else None
     }
     return jsonify(user_data)
 
@@ -451,21 +474,22 @@ def update_note(note_id):
     note.semester = data.get('semester', note.semester)
     note.academic_year = data.get('academic_year', note.academic_year)
 
+    if current_user.role in ['professor', 'super_admin']:
+        department_id = data.get('department_id')
+        note.department_id = int(department_id) if department_id else None
+
+    if current_user.role == 'super_admin':
+        section_ids = data.get('section_ids', [])
+        note.sections.clear()
+        if section_ids:
+            sections_to_add = Section.query.filter(Section.id.in_(section_ids)).all()
+            for sec in sections_to_add:
+                note.sections.append(sec)
+
     db.session.commit()
 
-    updated_note_data = {
-        'id': note.id,
-        'title': note.title,
-        'description': note.description,
-        'file_url': note.file_url,
-        'subject': note.subject,
-        'semester': note.semester,
-        'academic_year': note.academic_year,
-        'created_at': note.created_at.strftime('%Y-%m-%d %H:%M:%S'),
-        'author_username': note.author.username,
-        'user_id': note.user_id
-    }
-
+    updated_note_response = get_note_details(note_id)
+    updated_note_data = updated_note_response.get_json()
     return jsonify({
         "message": "Note updated successfully",
         "note": updated_note_data
@@ -477,11 +501,13 @@ def get_note_details(note_id):
     note = Note.query.options(
         joinedload(Note.author),
         joinedload(Note.department),
-        joinedload(Note.section)
+        joinedload(Note.sections)
     ).get(note_id)
 
     if not note:
         return jsonify({"error": "Note not found"}), 404
+
+    section_info = [{'id': s.id, 'code': s.section_code} for s in note.sections]
 
     note_data = {
         'id': note.id,
@@ -496,7 +522,8 @@ def get_note_details(note_id):
         'author_id': note.user_id,
         'is_verified': note.is_verified,
         'department_name': note.department.name if note.department else None,
-        'section_code': note.section.section_code if note.section else None
+        'department_id': note.department_id,
+        'sections': section_info
     }
     return jsonify(note_data)
 
@@ -931,3 +958,36 @@ def assign_student_section(user_id):
     db.session.commit()
     log_activity('student_section_assigned', f"Student '{user.username}' assigned to section ID {section_id}.")
     return jsonify(message="Student section updated successfully.")
+
+@api.route('/users/<username>', methods=['GET'])
+def get_public_profile(username):
+    user = User.query.options(joinedload(User.department)).filter_by(username=username).first()
+
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    notes = Note.query.filter_by(user_id=user.id).order_by(Note.created_at.desc()).all()
+
+    public_user_data = {
+        'username': user.username,
+        'role': user.role,
+        'department_name': user.department.name if user.department else None
+    }
+
+    notes_list = []
+    for note in notes:
+        note_data = {
+            'id': note.id,
+            'title': note.title,
+            'subject': note.subject,
+            'semester': note.semester,
+            'academic_year': note.academic_year,
+            'is_verified': note.is_verified,
+            'author_username': user.username
+        }
+        notes_list.append(note_data)
+
+    return jsonify({
+        'user': public_user_data,
+        'notes': notes_list
+    })

@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import api from '../api';
 import { toast } from 'react-toastify';
-import { Card, Grid, TextInput, Switch, Button, Text, Badge, Group, Paper, Loader, Center, Pagination, Modal } from '@mantine/core';
+import { Card, Grid, TextInput, Switch, Button, Text, Badge, Group, Paper, Loader, Center, Pagination, Modal, NumberInput, Select, MultiSelect } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 
 function NoteList() {
@@ -20,6 +20,7 @@ function NoteList() {
     const [opened, { open, close }] = useDisclosure(false);
     const [editingNote, setEditingNote] = useState(null);
 
+    const [profileDetails, setProfileDetails] = useState(null);
     const userRole = localStorage.getItem('userRole');
     const userId = localStorage.getItem('userId');
 
@@ -57,6 +58,17 @@ function NoteList() {
         return () => clearTimeout(timer);
     }, [filters, fetchNotes]);
 
+    useEffect(() => {
+        api.get('/profile/details').then(res => setProfileDetails(res.data));
+    }, []);
+
+    const availableSections = useMemo(() => {
+        if (!editingNote?.department_id || !profileDetails?.all_sections) return [];
+        return profileDetails.all_sections
+            .filter(s => String(s.department_id) === String(editingNote.department_id))
+            .map(s => ({ value: String(s.id), label: s.section_code }));
+    }, [editingNote, profileDetails]);
+
     const handlePageChange = (newPage) => {
         if (newPage >= 1 && newPage <= totalPages) {
             fetchNotes(filters, newPage);
@@ -85,7 +97,11 @@ function NoteList() {
     };
 
     const handleEditClick = (note) => {
-        setEditingNote({ ...note });
+        setEditingNote({
+            ...note,
+            department_id: note.department_id ? String(note.department_id) : '',
+            section_ids: note.sections ? note.sections.map(s => String(s.id)) : []
+        });
         open();
     };
 
@@ -205,13 +221,39 @@ function NoteList() {
                 </>
             )}
 
-            <Modal opened={opened} onClose={close} title="Edit Note">
+            <Modal opened={opened} onClose={close} title="Edit Note" size="lg">
                 {editingNote && (
                     <form onSubmit={handleUpdateNote}>
                         <TextInput label="Title" required value={editingNote.title} onChange={(e) => setEditingNote({ ...editingNote, title: e.currentTarget.value })} />
                         <TextInput label="Subject" required mt="md" value={editingNote.subject} onChange={(e) => setEditingNote({ ...editingNote, subject: e.currentTarget.value })} />
-                        <TextInput label="Semester" required mt="md" value={editingNote.semester} onChange={(e) => setEditingNote({ ...editingNote, semester: e.currentTarget.value })} />
+                        <NumberInput label="Semester" required mt="md" value={Number(editingNote.semester)} onChange={(value) => setEditingNote({ ...editingNote, semester: value })} min={1} max={8} />
                         <TextInput label="Academic Year" required mt="md" value={editingNote.academic_year} onChange={(e) => setEditingNote({ ...editingNote, academic_year: e.currentTarget.value })} />
+                        {profileDetails && (
+                            <>
+                                {userRole === 'professor' && (
+                                    <Select mt="md" label="Department"
+                                        data={profileDetails.departments_taught.map(d => ({ value: String(d.id), label: d.name }))}
+                                        value={editingNote.department_id}
+                                        onChange={(val) => setEditingNote({...editingNote, department_id: val})}
+                                    />
+                                )}
+                                {userRole === 'super_admin' && (
+                                    <Group grow mt="md">
+                                        <Select label="Department"
+                                            data={profileDetails.all_departments.map(d => ({ value: String(d.id), label: d.name }))}
+                                            value={editingNote.department_id}
+                                            onChange={(val) => setEditingNote({...editingNote, department_id: val, section_ids: []})}
+                                        />
+                                        <MultiSelect label="Sections"
+                                            data={availableSections}
+                                            value={editingNote.section_ids}
+                                            onChange={(val) => setEditingNote({...editingNote, section_ids: val})}
+                                            disabled={!editingNote.department_id}
+                                        />
+                                    </Group>
+                                )}
+                            </>
+                        )}
                         <Group justify="flex-end" mt="xl">
                             <Button variant="default" onClick={close}>Cancel</Button>
                             <Button type="submit">Save Changes</Button>
